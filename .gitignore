@@ -1,4 +1,6 @@
 .venv/
+.venv.previous-*/
+.runtime/
 __pycache__/
 *.pyc
 cache/

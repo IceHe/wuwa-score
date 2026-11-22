@@ -2,22 +2,15 @@
 
 鸣潮声骸实时评分工具，使用 Python 源码独立运行。切换单个声骸时，窗口会更新当前评分、理论最高分及词条档位。评分模板可按角色名搜索。
 
-## 启动
+## 安装与启动
 
-依赖装好后，双击项目根目录的 `start.cmd`，或在 PowerShell 中运行 `.\start.cmd`。
+在 Windows 10 或 11（Intel / AMD x64）上解压或克隆整个项目，再双击根目录的 **`install.cmd`**。安装需要联网。显示安装完成后，双击 **`start.cmd`** 启动。
 
-首次安装需要 Windows 10/11 和 64 位 Python 3.13。在 PowerShell 中执行以下命令。
+安装脚本会复用可用的项目虚拟环境。全新安装从 Python 官网下载 64 位 Python 3.14，核验 SHA-256 后解压到项目的 `.runtime`，再创建 `.venv` 并安装依赖。若原生库无法加载，脚本会尝试安装微软 Visual C++ 运行库，Windows 可能弹出管理员确认。
 
-```powershell
-cd E:\projects\wuwa-score
-py -3.13 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\start.cmd
-```
+依赖包自带 PP-OCRv6 small 模型。安装最后会验证图形界面依赖，并在本机运行一次 OCR 自检。
 
-依赖包自带 PP-OCRv6 small 模型，OCR 在本机运行，首次识别时会初始化并缓存模型。
-
-从使用 PP-OCRv5 的旧版升级时，先运行 `.\.venv\Scripts\python.exe -m pip uninstall -y onnxocr-ppocrv5`，再按上面命令安装依赖。两个版本的包共用 `onnxocr` 导入路径。
+更新代码或移动项目目录后，可以重新运行 `install.cmd`。脚本会处理旧版 PP-OCRv5 依赖。若项目虚拟环境无法使用，会先保留副本，再新建环境。
 
 ## 实时评分
 
