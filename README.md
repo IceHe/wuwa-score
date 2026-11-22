@@ -15,7 +15,9 @@ py -3.13 -m venv .venv
 .\start.cmd
 ```
 
-安装包自带 PP-OCRv5 模型，OCR 在本机运行，首次识别时会初始化并缓存模型。
+依赖包自带 PP-OCRv6 small 模型，OCR 在本机运行，首次识别时会初始化并缓存模型。
+
+从使用 PP-OCRv5 的旧版升级时，先运行 `.\.venv\Scripts\python.exe -m pip uninstall -y onnxocr-ppocrv5`，再按上面命令安装依赖。两个版本的包共用 `onnxocr` 导入路径。
 
 ## 实时评分
 
@@ -36,7 +38,7 @@ py -3.13 -m venv .venv
 
 ## 来源
 
-评分公式沿用 ok-wuthering-waves。装配角色匹配参考 `slim` 分支的声骸评分插件 0.3.13，OCR 使用同款 `onnxocr-ppocrv5` 模型。内置 68 套模板，与该插件所用的 XutheringWavesUID-Resources 快照 `c2bd6cd0036a1065ed56ac23243a7779c8f310e0` 一致。
+评分公式沿用 ok-wuthering-waves。装配角色匹配参考 `slim` 分支的声骸评分插件 0.3.13，OCR 模型与 D 盘已安装版 OKWW 使用的 PP-OCRv6 small 一致。内置 68 套模板，与该插件所用的 XutheringWavesUID-Resources 快照 `c2bd6cd0036a1065ed56ac23243a7779c8f310e0` 一致。
 
 实时输入来自 Windows 可见桌面像素。评分工具的依赖和运行入口均在本项目内。
 

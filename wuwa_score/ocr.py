@@ -1,4 +1,4 @@
-"""Standalone PP-OCRv5 adapter using the same models as okww."""
+"""Standalone adapter for the PP-OCRv6 small models used by installed OKWW."""
 
 from dataclasses import replace
 

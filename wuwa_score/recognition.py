@@ -21,7 +21,7 @@ STAT_ALIASES = {
 STAT_NAMES = set(MAX_SUBSTAT_VALUES).union(
     *(primary for primary, _ in MAX_MAINSTAT_VALUES.values())
 )
-STAT_LABEL_PREFIX = "+✦✧✶✷·•・●▪"
+STAT_LABEL_PREFIX = "+✦✧✶✷·•・●▪Xx×@"
 NUMBER = r"(?:\+?\d+(?:[.,]\d+)*%?|[.·。]\d{2,4})"
 INLINE_STAT = re.compile(rf"(.+?)({NUMBER})$")
 COST = re.compile(r"(?:COST|C0ST)[:：]?([134])?", re.IGNORECASE)
@@ -68,7 +68,7 @@ def clean(text):
 
 
 def _stat_name(label, percent):
-    # OCR sees the sparkle at the start of the row as "+" on real frames.
+    # OCR can read the stat icons as a leading "+", "X" or "@".
     label = label.lstrip(STAT_LABEL_PREFIX)
     label = STAT_ALIASES.get(label, label)
     if label in ("攻击", "防御", "生命") and percent:

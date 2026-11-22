@@ -50,8 +50,8 @@ class TestEchoRecognition(unittest.TestCase):
             with self.subTest(heading=heading):
                 boxes = [box("COST 3", .39, .176, .51), box(heading, .38, .454, .62)]
                 for name, value, y in (
-                    ("共鸣效率", "32.0%", .217),
-                    ("攻击", "100", .250),
+                    ("@共鸣效率", "32.0%", .217),
+                    ("X攻击", "100", .250),
                     ("+重击伤害加成", "11.6%", .283),
                     ("+攻击", "7.9%", .317),
                     ("+生命", "510", .349),
