@@ -33,8 +33,19 @@
 
 ## 来源
 
-评分公式沿用 ok-wuthering-waves。装配角色匹配参考 `slim` 分支的声骸评分插件 0.3.13，OCR 模型与 D 盘已安装版 OKWW 使用的 PP-OCRv6 small 一致。内置 68 套模板，与该插件所用的 XutheringWavesUID-Resources 快照 `c2bd6cd0036a1065ed56ac23243a7779c8f310e0` 一致。
+评分公式沿用 ok-wuthering-waves。装配角色匹配参考 `slim` 分支的声骸评分插件 0.3.13，OCR 使用 PP-OCRv6 small。内置模板的上游提交号记录在 [templates.json](wuwa_score/templates.json)。
 
 实时输入来自 Windows 可见桌面像素。评分工具的依赖和运行入口均在本项目内。
 
 许可见 [LICENSE.txt](LICENSE.txt)。
+
+## 更新评分模板
+
+安装 Git 后，在项目目录运行以下命令。第一条查看新增、更新及移除的模板，第二条生成新的模板快照。
+
+```powershell
+.\.venv\Scripts\python.exe scripts\update_xwuid_echo_templates.py --check
+.\.venv\Scripts\python.exe scripts\update_xwuid_echo_templates.py
+```
+
+脚本从 [XutheringWavesUID-Resources](https://cnb.cool/loping151/XutheringWavesUID-Resources) 的 `main` 分支读取全量角色及多模态权重、条件和提交号。资源缓存位于 `cache\xwuid-score-resources`。已有资源检出时，可在命令末尾加 `--no-fetch <资源目录>` 使用本地版本。更新后重启评分工具加载新模板。

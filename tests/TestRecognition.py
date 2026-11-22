@@ -85,6 +85,7 @@ class TestEchoRecognition(unittest.TestCase):
         for badge, expected in (
             ("维里奈装配中", "维里奈-通用"),
             ("洛瑟菈装配中", "洛瑟菈-声骸-羽落"),
+            ("莉莉装配中", "莉莉-通用"),
             ("鎖暝裝配中", "锁暝-通用"),
             ("心装配中", "心-通用"),
             ("鉴心装配中", "鉴心-通用"),

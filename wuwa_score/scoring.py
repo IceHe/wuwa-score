@@ -12,7 +12,8 @@ import json
 import math
 from pathlib import Path
 
-TEMPLATES = json.loads(Path(__file__).with_name("templates.json").read_text(encoding="utf-8"))
+with Path(__file__).with_name("templates.json").open(encoding="utf-8") as snapshot:
+    TEMPLATES = json.load(snapshot)["templates"]
 SCORE_PER_ECHO = 50.0
 ELEMENT_NAMES = {"冷凝", "热熔", "导电", "气动", "衍射", "湮灭"}
 SKILL_WEIGHT_INDEX = {
