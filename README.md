@@ -4,16 +4,18 @@
 
 ## 启动
 
-使用 Windows 10/11 和 64 位 Python 3.13。在 PowerShell 中执行以下命令。
+依赖装好后，双击项目根目录的 `start.cmd`，或在 PowerShell 中运行 `.\start.cmd`。
+
+首次安装需要 Windows 10/11 和 64 位 Python 3.13。在 PowerShell 中执行以下命令。
 
 ```powershell
 cd E:\projects\wuwa-score
 py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe main.py
+.\start.cmd
 ```
 
-依赖装好后，每次只需执行最后一条命令。安装包自带 PP-OCRv5 模型，OCR 在本机运行，首次识别时会初始化并缓存模型。
+安装包自带 PP-OCRv5 模型，OCR 在本机运行，首次识别时会初始化并缓存模型。
 
 ## 实时评分
 
