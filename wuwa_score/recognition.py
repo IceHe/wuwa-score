@@ -7,7 +7,7 @@ import unicodedata
 from .scoring import EQUIPPED_TEMPLATES, MAX_MAINSTAT_VALUES, MAX_SUBSTAT_VALUES
 
 
-RIGHT_HEADINGS = ("声骸技能", "合鸣效果")
+RIGHT_HEADINGS = ("声骸技能", "声骸技能对策技", "合鸣效果")
 LEFT_HEADINGS = ("声骸强化", "强化并调谐", "已完成全部调谐")
 STAT_ALIASES = {
     "暴击率": "暴击",
@@ -30,7 +30,7 @@ TRADITIONAL_TEXT = str.maketrans({
     "裝": "装", "擊": "击", "撃": "击", "傷": "伤", "療": "疗", "禦": "御",
     "導": "导", "電": "电", "氣": "气", "熱": "热", "滅": "灭", "寧": "宁", "達": "达",
     "貝": "贝", "霽": "霁", "聖": "圣", "蘿": "萝", "爾": "尔", "維": "维",
-    "愛": "爱", "彌": "弥", "鎖": "锁", "鑑": "鉴",
+    "愛": "爱", "彌": "弥", "鎖": "锁", "鑑": "鉴", "對": "对",
 })
 
 
@@ -182,7 +182,7 @@ def _infer_cost(boxes, primary, fixed):
 
 def stat_region(boxes, *, tuning):
     headings = LEFT_HEADINGS if tuning else RIGHT_HEADINGS
-    markers = [box for box in boxes if box.text.rstrip(":") in headings]
+    markers = [box for box in boxes if box.text.replace(":", "") in headings]
     if not markers:
         return None
     return 0.17, 0.57 if tuning else min(box.y for box in markers)

@@ -45,6 +45,25 @@ class TestEchoRecognition(unittest.TestCase):
         self.assertEqual(5, len(echo.sub_rows))
         self.assertEqual("共鸣技能", echo.sub_rows[-1].stat_name)
 
+    def test_cost_three_with_countermeasure_skill_heading(self):
+        for heading in ("声骸技能 对策技", "聲骸技能：對策技"):
+            with self.subTest(heading=heading):
+                boxes = [box("COST 3", .39, .176, .51), box(heading, .38, .454, .62)]
+                for name, value, y in (
+                    ("共鸣效率", "32.0%", .217),
+                    ("攻击", "100", .250),
+                    ("+重击伤害加成", "11.6%", .283),
+                    ("+攻击", "7.9%", .317),
+                    ("+生命", "510", .349),
+                    ("+共鸣效率", "9.2%", .381),
+                    ("+生命", "7.9%", .412),
+                ):
+                    boxes.extend((box(name, .39, y, .63), box(value, .79, y, .89)))
+                echo = find_echo(boxes, tuning=False)
+                self.assertEqual(3, echo.cost)
+                self.assertEqual([11.6, 7.9, 510, 9.2, 7.9], [row.value for row in echo.sub_rows])
+                self.assertIsNone(find_echo(boxes[:1] + boxes[2:], tuning=False))
+
     def test_crop_retry_recovers_a_missing_final_row(self):
         reader = EchoReader.__new__(EchoReader)
         boxes = detail_boxes()
