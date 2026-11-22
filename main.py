@@ -16,6 +16,7 @@ def score_image(path, template):
     if echo is None:
         print("未识别到完整的单个声骸面板。", file=sys.stderr)
         return 1
+    template = template or echo.equipped_template or DEFAULT_TEMPLATE
     score = calculate_echo_score(template, echo.cost, echo.main_rows, echo.sub_rows)
     print(f"{template} · {echo.cost} COST")
     print(f"当前评分 {score.current_score:.2f} · 理论最高 {score.potential_score:.2f}")
@@ -28,9 +29,9 @@ def score_image(path, template):
 def main():
     parser = argparse.ArgumentParser(description="鸣潮声骸实时评分")
     parser.add_argument("--image", type=Path, metavar="PATH", help="评估本地游戏截图并输出到终端")
-    parser.add_argument("--template", default=DEFAULT_TEMPLATE, metavar="NAME", help="初始评分模板")
+    parser.add_argument("--template", metavar="NAME", help="实时评分的备用模板，或截图评分的指定模板")
     args = parser.parse_args()
-    if args.template not in template_names():
+    if args.template is not None and args.template not in template_names():
         parser.error(f"未知的评分模板：{args.template}")
     if args.image:
         try:
@@ -41,7 +42,7 @@ def main():
         parser.error("实时评分需要 Windows")
     from wuwa_score.app import run
 
-    run(args.template)
+    run(args.template or DEFAULT_TEMPLATE)
     return 0
 
 

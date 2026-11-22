@@ -119,11 +119,16 @@ class ScoreWindow:
         self.selector.bind("<<ComboboxSelected>>", self.select_template)
         self.selector.bind("<Return>", self.select_template)
         self.selector.bind("<Escape>", self.restore_template)
+        self.auto_match = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            controls, style="Score.TCheckbutton", text="自动", variable=self.auto_match,
+            command=self.render,
+        ).grid(row=0, column=2, padx=(8, 0))
         self.topmost = tk.BooleanVar(value=True)
         ttk.Checkbutton(
             controls, style="Score.TCheckbutton", text="置顶", variable=self.topmost,
             command=lambda: root.attributes("-topmost", self.topmost.get()),
-        ).grid(row=0, column=2, padx=(8, 0))
+        ).grid(row=0, column=3, padx=(8, 0))
 
         self.status = tk.StringVar(value="等待鸣潮切到前台")
         tk.Label(content, textvariable=self.status, bg=BG, fg=MUTED, font=(FONT, 9),
@@ -202,10 +207,12 @@ class ScoreWindow:
             return
 
         echo = self.echo
-        score = calculate_echo_score(self.template, echo.cost, echo.main_rows, echo.sub_rows)
+        matched = echo.equipped_template if self.auto_match.get() else None
+        score = calculate_echo_score(matched or self.template, echo.cost, echo.main_rows, echo.sub_rows)
         self.current.set(f"{score.current_score:.2f}")
         self.potential.set(f"{score.potential_score:.2f}")
-        self.cost.set(f"{echo.cost} COST   ·   主词条按 +25 计分")
+        detail = f"{matched}（自动匹配）" if matched else "主词条按 +25 计分"
+        self.cost.set(f"{echo.cost} COST   ·   {detail}")
         for index, (row, points) in enumerate(zip(echo.main_rows + echo.sub_rows, score.row_scores)):
             main = index < len(echo.main_rows)
             tier = "主词条" if main else substat_tier_label(row.stat_name, row.value)

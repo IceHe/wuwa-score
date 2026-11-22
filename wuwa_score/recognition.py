@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import re
 import unicodedata
 
-from .scoring import MAX_MAINSTAT_VALUES, MAX_SUBSTAT_VALUES
+from .scoring import EQUIPPED_TEMPLATES, MAX_MAINSTAT_VALUES, MAX_SUBSTAT_VALUES
 
 
 RIGHT_HEADINGS = ("声骸技能", "合鸣效果")
@@ -21,9 +21,17 @@ STAT_ALIASES = {
 STAT_NAMES = set(MAX_SUBSTAT_VALUES).union(
     *(primary for primary, _ in MAX_MAINSTAT_VALUES.values())
 )
-NUMBER = r"\+?\d+(?:[.,]\d+)*%?"
+STAT_LABEL_PREFIX = "+✦✧✶✷·•・●▪"
+NUMBER = r"(?:\+?\d+(?:[.,]\d+)*%?|[.·。]\d{2,4})"
 INLINE_STAT = re.compile(rf"(.+?)({NUMBER})$")
 COST = re.compile(r"(?:COST|C0ST)[:：]?([134])?", re.IGNORECASE)
+TRADITIONAL_TEXT = str.maketrans({
+    "聲": "声", "強": "强", "並": "并", "調": "调", "諧": "谐", "鳴": "鸣",
+    "裝": "装", "擊": "击", "撃": "击", "傷": "伤", "療": "疗", "禦": "御",
+    "導": "导", "電": "电", "氣": "气", "熱": "热", "滅": "灭", "寧": "宁", "達": "达",
+    "貝": "贝", "霽": "霁", "聖": "圣", "蘿": "萝", "爾": "尔", "維": "维",
+    "愛": "爱", "彌": "弥", "鎖": "锁", "鑑": "鉴",
+})
 
 
 @dataclass(frozen=True)
@@ -51,15 +59,17 @@ class Echo:
     cost: int
     main_rows: tuple[StatRow, ...]
     sub_rows: tuple[StatRow, ...]
+    equipped_template: str | None = None
 
 
 def clean(text):
-    return "".join(unicodedata.normalize("NFKC", text).split())
+    normalized = unicodedata.normalize("NFKC", text).translate(TRADITIONAL_TEXT)
+    return "".join(normalized.split())
 
 
 def _stat_name(label, percent):
-    # The detector can include the bullet to the left of a substat.
-    label = label.lstrip("·•・●▪")
+    # OCR sees the sparkle at the start of the row as "+" on real frames.
+    label = label.lstrip(STAT_LABEL_PREFIX)
     label = STAT_ALIASES.get(label, label)
     if label in ("攻击", "防御", "生命") and percent:
         label += "%"
@@ -72,7 +82,7 @@ def _stat_row(label, number):
         return None
     if number.endswith("%") != (name not in ("攻击", "防御", "生命")):
         return None
-    value = number.lstrip("+").rstrip("%")
+    value = number.lstrip("+.·。").rstrip("%")
     if re.fullmatch(r"\d{1,3}(?:,\d{3})+", value):
         value = value.replace(",", "")
     else:
@@ -88,8 +98,27 @@ def _stat_row(label, number):
 
 def _same_line(first, second):
     return abs(first.center_y - second.center_y) <= max(
-        0.006, min(first.height, second.height) * 0.55
+        0.010, min(first.height, second.height) * 0.60
     )
+
+
+def find_equipped_template(boxes):
+    """Match the equipped badge, including when OCR splits its name and suffix."""
+    for box in boxes:
+        if not box.text.endswith("装配中"):
+            continue
+        character = box.text.removesuffix("装配中").lstrip(STAT_LABEL_PREFIX)
+        preceding = [
+            other for other in boxes
+            if other.x < box.x and -0.025 <= box.x - other.right <= 0.12
+            and _same_line(other, box)
+        ]
+        for other in sorted(preceding, key=lambda item: item.right, reverse=True):
+            if template := EQUIPPED_TEMPLATES.get(other.text.lstrip(STAT_LABEL_PREFIX) + character):
+                return template
+        if template := EQUIPPED_TEMPLATES.get(character):
+            return template
+    return None
 
 
 def _rows(boxes):
@@ -151,13 +180,20 @@ def _infer_cost(boxes, primary, fixed):
     return None
 
 
-def find_echo(boxes, *, tuning):
+def stat_region(boxes, *, tuning):
     headings = LEFT_HEADINGS if tuning else RIGHT_HEADINGS
     markers = [box for box in boxes if box.text.rstrip(":") in headings]
     if not markers:
         return None
-    bottom = 0.57 if tuning else min(box.y for box in markers)
-    pairs = _rows([box for box in boxes if 0.17 <= box.center_y < bottom])
+    return 0.17, 0.57 if tuning else min(box.y for box in markers)
+
+
+def find_echo(boxes, *, tuning, region=None):
+    region = region or stat_region(boxes, tuning=tuning)
+    if region is None:
+        return None
+    top, bottom = region
+    pairs = _rows([box for box in boxes if top <= box.center_y < bottom])
     if not 2 <= len(pairs) <= 7 or any(row is None for _, row in pairs):
         return None
     primary, fixed, *sub_rows = [row for _, row in pairs]

@@ -117,10 +117,16 @@ def _build_template_options():
 
 TEMPLATE_OPTIONS = _build_template_options()
 DEFAULT_TEMPLATE = TEMPLATES["default"]["default"]["name"]
+# Match the OKWW plugin's choice of the last variant for each character.
+EQUIPPED_TEMPLATES = {
+    label.partition("-")[0]: label
+    for label in TEMPLATE_OPTIONS
+    if label != DEFAULT_TEMPLATE and "-" in label
+}
 
 
 def template_names():
-    """Return all 66 character/modal templates as unique display labels."""
+    """Return character and variant templates as unique display labels."""
     return list(TEMPLATE_OPTIONS)
 
 
