@@ -55,11 +55,18 @@ class StatRow:
 
 
 @dataclass(frozen=True)
+class StatAnchor:
+    left: float
+    center_y: float
+
+
+@dataclass(frozen=True)
 class Echo:
     cost: int
     main_rows: tuple[StatRow, ...]
     sub_rows: tuple[StatRow, ...]
     equipped_template: str | None = None
+    anchors: tuple[StatAnchor, ...] = ()
 
 
 def clean(text):
@@ -212,4 +219,5 @@ def find_echo(boxes, *, tuning, region=None):
     cost = _infer_cost(cost_boxes, primary, fixed)
     if cost is None:
         return None
-    return Echo(cost, (primary, fixed), tuple(sub_rows))
+    anchors = tuple(StatAnchor(float(box.x), float(box.center_y)) for box, _ in pairs)
+    return Echo(cost, (primary, fixed), tuple(sub_rows), anchors=anchors)

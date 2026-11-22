@@ -7,7 +7,8 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 
-from .capture import capture_game, enable_dpi_awareness
+from .capture import GameWindow, capture_game, enable_dpi_awareness, foreground_game
+from .overlay import ScoreOverlay
 from .recognition import Echo
 from .scoring import calculate_echo_score, substat_tier_label, template_names
 
@@ -17,6 +18,7 @@ class Update:
     status: str
     echo: Echo | None = None
     clear: bool = False
+    game: GameWindow | None = None
 
 
 def scan_live(updates, stop, capture=capture_game):
@@ -31,16 +33,17 @@ def scan_live(updates, stop, capture=capture_game):
 
     while not stop.is_set():
         try:
-            image = capture()
+            frame = capture()
         except OSError:
             publish(Update("暂时无法截取画面，正在重试"))
             stop.wait(0.5)
             continue
 
-        if image is None:
+        if frame is None:
             publish(Update("等待鸣潮切到前台"))
             stop.wait(0.5)
             continue
+        image, game = frame
         try:
             if reader is None:
                 publish(Update("正在加载 OCR 模型…"))
@@ -57,7 +60,7 @@ def scan_live(updates, stop, capture=capture_game):
         if echo is None:
             publish(Update("请打开单个声骸的详情或强化页面", clear=True))
         else:
-            publish(Update("已识别当前声骸", echo))
+            publish(Update("已识别当前声骸", echo, game=game))
         stop.wait(0.5)
 
 
@@ -74,7 +77,10 @@ class ScoreWindow:
         self.root = root
         self.updates = updates
         self.echo = None
+        self.game = None
+        self.score = None
         self.template = template
+        self.applied_template = template
         self.template_choices = template_names()
 
         root.title("wuwa-score · 声骸评分")
@@ -84,7 +90,6 @@ class ScoreWindow:
         offset = max(0, (root.winfo_screenwidth() - 390) // 2)
         root.geometry(f"390x410+{offset}+48")
         root.minsize(375, 410)
-        root.attributes("-topmost", True)
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
 
@@ -124,7 +129,7 @@ class ScoreWindow:
             controls, style="Score.TCheckbutton", text="自动", variable=self.auto_match,
             command=self.render,
         ).grid(row=0, column=2, padx=(8, 0))
-        self.topmost = tk.BooleanVar(value=True)
+        self.topmost = tk.BooleanVar(value=False)
         ttk.Checkbutton(
             controls, style="Score.TCheckbutton", text="置顶", variable=self.topmost,
             command=lambda: root.attributes("-topmost", self.topmost.get()),
@@ -150,9 +155,18 @@ class ScoreWindow:
                              anchor="w" if column == "stat" else "center")
         self.rows.tag_configure("main", foreground=ACCENT)
         self.rows.grid(row=3, column=0, sticky="nsew")
+        footer = tk.Frame(content, background=BG)
+        footer.grid(row=4, column=0, sticky="ew", pady=(5, 0))
+        footer.columnconfigure(0, weight=1)
         self.cost = tk.StringVar()
-        tk.Label(content, textvariable=self.cost, bg=BG, fg=MUTED, font=(FONT, 9),
-                 anchor="w").grid(row=4, column=0, sticky="ew", pady=(5, 0))
+        tk.Label(footer, textvariable=self.cost, bg=BG, fg=MUTED, font=(FONT, 9),
+                 anchor="w").grid(row=0, column=0, sticky="ew")
+        self.overlay_enabled = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            footer, style="Score.TCheckbutton", text="画面内评分", variable=self.overlay_enabled,
+            command=self.refresh_overlay,
+        ).grid(row=0, column=1, padx=(8, 0))
+        self.overlay = ScoreOverlay(root)
         root.after(100, self.poll)
 
     @staticmethod
@@ -193,14 +207,24 @@ class ScoreWindow:
             except queue.Empty:
                 break
             self.status.set(update.status)
+            self.game = update.game
             if update.echo is not None or update.clear:
                 self.echo = update.echo
                 self.render()
+        self.refresh_overlay()
         self.root.after(100, self.poll)
+
+    def refresh_overlay(self):
+        if (self.overlay_enabled.get() and self.game is not None and self.score is not None
+                and foreground_game() == self.game):
+            self.overlay.show(self.game, self.echo, self.score, self.applied_template)
+        else:
+            self.overlay.hide()
 
     def render(self):
         self.rows.delete(*self.rows.get_children())
         if self.echo is None:
+            self.score = None
             self.current.set("—")
             self.potential.set("—")
             self.cost.set("")
@@ -208,7 +232,9 @@ class ScoreWindow:
 
         echo = self.echo
         matched = echo.equipped_template if self.auto_match.get() else None
-        score = calculate_echo_score(matched or self.template, echo.cost, echo.main_rows, echo.sub_rows)
+        self.applied_template = matched or self.template
+        score = calculate_echo_score(self.applied_template, echo.cost, echo.main_rows, echo.sub_rows)
+        self.score = score
         self.current.set(f"{score.current_score:.2f}")
         self.potential.set(f"{score.potential_score:.2f}")
         detail = f"{matched}（自动匹配）" if matched else "主词条按 +25 计分"

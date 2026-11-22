@@ -2,6 +2,7 @@
 
 import ctypes
 from ctypes import wintypes
+from dataclasses import dataclass
 
 from PIL import ImageGrab
 
@@ -21,12 +22,18 @@ _user32.ClientToScreen.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.POINT)
 _user32.ClientToScreen.restype = wintypes.BOOL
 
 
+@dataclass(frozen=True)
+class GameWindow:
+    hwnd: int
+    bounds: tuple[int, int, int, int]
+
+
 def enable_dpi_awareness():
     # Per-monitor v2 keeps the coordinates in physical pixels on every display.
     _user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
 
 
-def _foreground_game():
+def foreground_game():
     hwnd = _user32.GetForegroundWindow()
     if not hwnd:
         return None
@@ -48,15 +55,14 @@ def _foreground_game():
         return None
     if rect.right < 640 or rect.bottom < 360:
         return None
-    return hwnd, (origin.x, origin.y, origin.x + rect.right, origin.y + rect.bottom)
+    return GameWindow(hwnd, (origin.x, origin.y, origin.x + rect.right, origin.y + rect.bottom))
 
 
 def capture_game():
-    game = _foreground_game()
+    game = foreground_game()
     if game is None:
         return None
-    _, bounds = game
-    image = ImageGrab.grab(bbox=bounds, all_screens=True)
-    if _foreground_game() != game:
+    image = ImageGrab.grab(bbox=game.bounds, all_screens=True)
+    if foreground_game() != game:
         return None
-    return image
+    return image, game

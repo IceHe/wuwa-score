@@ -68,8 +68,12 @@ class TestEchoRecognition(unittest.TestCase):
         reader = EchoReader.__new__(EchoReader)
         boxes = detail_boxes()
         reader._read_boxes = Mock(side_effect=[boxes[:-2], boxes])
-        echo = reader._read_panel(Image.new("RGB", (560, 747)), 900, tuning=False)
+        echo = reader._read_panel(Image.new("RGB", (560, 747)), 1600, 900,
+                                 origin_x=1040, tuning=False)
         self.assertEqual(5, len(echo.sub_rows))
+        self.assertEqual(7, len(echo.anchors))
+        self.assertAlmostEqual((1040 + .39 * 560) / 1600, echo.anchors[-1].left)
+        self.assertAlmostEqual(.414 + .013, echo.anchors[-1].center_y)
         self.assertEqual(("stats", False), reader._read_boxes.call_args.args[0])
         self.assertEqual(1.5, reader._read_boxes.call_args.kwargs["scale"])
 

@@ -29,13 +29,13 @@ class EchoReader:
         # on wider displays. Size their search areas from the 16:9 layout.
         layout_width = min(width, height * 16 / 9)
         left = image.crop((0, 0, round(layout_width * 0.41), round(height * 0.57)))
-        echo = self._read_panel(left, height, tuning=True)
+        echo = self._read_panel(left, width, height, origin_x=0, tuning=True)
         if echo is not None:
             return replace(echo, equipped_template=self.equipped_template)
 
         right_edge = width - round(layout_width * 0.35)
         right = image.crop((right_edge, 0, width, round(height * 0.83)))
-        echo = self._read_panel(right, height, tuning=False)
+        echo = self._read_panel(right, width, height, origin_x=right_edge, tuning=False)
         if echo is None:
             self.equipped_template = None
             return None
@@ -46,27 +46,32 @@ class EchoReader:
         self.equipped_template = find_equipped_template(boxes)
         return replace(echo, equipped_template=self.equipped_template)
 
-    def _read_panel(self, panel, height, *, tuning):
+    def _read_panel(self, panel, width, height, *, origin_x, tuning):
         boxes = self._read_boxes(("panel", tuning), panel, height)
         region = stat_region(boxes, tuning=tuning)
         if region is None or region[1] <= region[0]:
             return None
         echo = find_echo(boxes, tuning=tuning, region=region)
-        if echo is not None and len(echo.sub_rows) == 5:
-            return echo
+        if echo is None or len(echo.sub_rows) < 5:
+            # Re-read the rows at a larger scale when a separate box was lost.
+            top, bottom = region
+            start = round(height * (top - 0.01))
+            end = min(panel.height, round(height * (bottom + 0.01)))
+            stats = panel.crop((0, start, panel.width, end))
+            detailed = self._read_boxes(("stats", tuning), stats, height, top=start, scale=1.5)
+            context = [box for box in boxes if not top <= box.center_y < bottom]
+            reread = find_echo(context + detailed, tuning=tuning, region=region)
+            if reread is not None and (echo is None or len(reread.sub_rows) > len(echo.sub_rows)):
+                echo = reread
+        if echo is None:
+            return None
 
-        # Give small or low-contrast rows a second pass without the rest of
-        # the screen competing for detector resolution.
-        top, bottom = region
-        start = round(height * (top - 0.01))
-        end = min(panel.height, round(height * (bottom + 0.01)))
-        stats = panel.crop((0, start, panel.width, end))
-        detailed = self._read_boxes(("stats", tuning), stats, height, top=start, scale=1.5)
-        context = [box for box in boxes if not top <= box.center_y < bottom]
-        reread = find_echo(context + detailed, tuning=tuning, region=region)
-        if reread is not None and (echo is None or len(reread.sub_rows) > len(echo.sub_rows)):
-            return reread
-        return echo
+        # OCR uses the crop's x coordinates. The overlay uses the full client.
+        anchors = tuple(
+            replace(anchor, left=(origin_x + anchor.left * panel.width) / width)
+            for anchor in echo.anchors
+        )
+        return replace(echo, anchors=anchors)
 
     def _read_boxes(self, key, panel, height, *, top=0, scale=1.0):
         signature = (panel.size, height, top, panel.tobytes())
