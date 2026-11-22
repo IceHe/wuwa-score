@@ -4,11 +4,16 @@ from unittest.mock import Mock
 from PIL import Image
 
 from wuwa_score.ocr import EchoReader
-from wuwa_score.recognition import TextBox, clean, find_echo, find_equipped_template
+from wuwa_score.recognition import TextBox, clean, find_echo, find_equipped_names
+from wuwa_score.scoring import template_for_equipped_names
 
 
 def box(text, x, y, right):
     return TextBox(clean(text), x, y, right, 0.026)
+
+
+def matched_template(boxes):
+    return template_for_equipped_names(find_equipped_names(boxes))
 
 
 def detail_boxes():
@@ -92,17 +97,17 @@ class TestEchoRecognition(unittest.TestCase):
             ("陌生心装配中", None),
         ):
             with self.subTest(badge=badge):
-                self.assertEqual(expected, find_equipped_template([box(badge, .42, .87, .63)]))
+                self.assertEqual(expected, matched_template([box(badge, .42, .87, .63)]))
 
     def test_matches_split_badge_only_on_same_line(self):
         marker = box("装配中", .52, .87, .61)
         self.assertEqual(
             "维里奈-通用",
-            find_equipped_template([marker, box("维里奈", .42, .871, .51)]),
+            matched_template([marker, box("维里奈", .42, .871, .51)]),
         )
-        self.assertIsNone(find_equipped_template([marker, box("维里奈", .42, .80, .51)]))
-        self.assertIsNone(find_equipped_template([box("维里奈", .42, .871, .51)]))
+        self.assertIsNone(matched_template([marker, box("维里奈", .42, .80, .51)]))
+        self.assertIsNone(matched_template([box("维里奈", .42, .871, .51)]))
         self.assertEqual(
             "鉴心-通用",
-            find_equipped_template([box("心装配中", .52, .87, .63), box("鉴", .47, .87, .51)]),
+            matched_template([box("心装配中", .52, .87, .63), box("鉴", .47, .87, .51)]),
         )

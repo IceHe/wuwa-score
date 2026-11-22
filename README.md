@@ -41,11 +41,13 @@
 
 ## 更新评分模板
 
-安装 Git 后，在项目目录运行以下命令。第一条查看新增、更新及移除的模板，第二条生成新的模板快照。
+安装 Git 后，可在评分窗口点「更新角色权重」。联网拉取后，程序会刷新模板列表，并用新权重重算当前声骸。通过窗体更新无需重启。
+
+也可以在项目目录运行以下命令。第一条查看新增、更新及移除的模板，第二条生成新的模板快照。
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\update_xwuid_echo_templates.py --check
 .\.venv\Scripts\python.exe scripts\update_xwuid_echo_templates.py
 ```
 
-脚本从 [XutheringWavesUID-Resources](https://cnb.cool/loping151/XutheringWavesUID-Resources) 的 `main` 分支读取全量角色及多模态权重、条件和提交号。资源缓存位于 `cache\xwuid-score-resources`。已有资源检出时，可在命令末尾加 `--no-fetch <资源目录>` 使用本地版本。更新后重启评分工具加载新模板。
+脚本从 [XutheringWavesUID-Resources](https://cnb.cool/loping151/XutheringWavesUID-Resources) 的 `main` 分支读取全量角色及多模态权重、条件和提交号。资源缓存位于 `cache\xwuid-score-resources`。已有资源检出时，可在命令末尾加 `--no-fetch <资源目录>` 使用本地版本。通过命令行更新后，已打开的评分工具可点一次「更新角色权重」加载新模板。

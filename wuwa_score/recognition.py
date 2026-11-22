@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import re
 import unicodedata
 
-from .scoring import EQUIPPED_TEMPLATES, MAX_MAINSTAT_VALUES, MAX_SUBSTAT_VALUES
+from .scoring import MAX_MAINSTAT_VALUES, MAX_SUBSTAT_VALUES, template_for_equipped_names
 
 
 RIGHT_HEADINGS = ("声骸技能", "声骸技能对策技", "合鸣效果")
@@ -65,8 +65,12 @@ class Echo:
     cost: int
     main_rows: tuple[StatRow, ...]
     sub_rows: tuple[StatRow, ...]
-    equipped_template: str | None = None
+    equipped_names: tuple[str, ...] = ()
     anchors: tuple[StatAnchor, ...] = ()
+
+    @property
+    def equipped_template(self):
+        return template_for_equipped_names(self.equipped_names)
 
 
 def clean(text):
@@ -109,8 +113,9 @@ def _same_line(first, second):
     )
 
 
-def find_equipped_template(boxes):
-    """Match the equipped badge, including when OCR splits its name and suffix."""
+def find_equipped_names(boxes):
+    """Read badge candidates independently of the currently loaded weights."""
+    names = []
     for box in boxes:
         if not box.text.endswith("装配中"):
             continue
@@ -121,11 +126,10 @@ def find_equipped_template(boxes):
             and _same_line(other, box)
         ]
         for other in sorted(preceding, key=lambda item: item.right, reverse=True):
-            if template := EQUIPPED_TEMPLATES.get(other.text.lstrip(STAT_LABEL_PREFIX) + character):
-                return template
-        if template := EQUIPPED_TEMPLATES.get(character):
-            return template
-    return None
+            names.append(other.text.lstrip(STAT_LABEL_PREFIX) + character)
+        if character:
+            names.append(character)
+    return tuple(names)
 
 
 def _rows(boxes):

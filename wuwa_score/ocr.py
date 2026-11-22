@@ -7,7 +7,7 @@ import numpy as np
 from PIL import Image
 from onnxocr.onnx_paddleocr import ONNXPaddleOcr
 
-from .recognition import TextBox, clean, find_echo, find_equipped_template, stat_region
+from .recognition import TextBox, clean, find_echo, find_equipped_names, stat_region
 
 
 class EchoReader:
@@ -16,7 +16,7 @@ class EchoReader:
             use_openvino=True, use_npu=False, use_angle_cls=False, det_limit_side_len=1280
         )
         self.previous = {}
-        self.equipped_template = None
+        self.equipped_names = ()
 
     def read(self, image):
         image = image.convert("RGB")
@@ -31,20 +31,20 @@ class EchoReader:
         left = image.crop((0, 0, round(layout_width * 0.41), round(height * 0.57)))
         echo = self._read_panel(left, width, height, origin_x=0, tuning=True)
         if echo is not None:
-            return replace(echo, equipped_template=self.equipped_template)
+            return replace(echo, equipped_names=self.equipped_names)
 
         right_edge = width - round(layout_width * 0.35)
         right = image.crop((right_edge, 0, width, round(height * 0.83)))
         echo = self._read_panel(right, width, height, origin_x=right_edge, tuning=False)
         if echo is None:
-            self.equipped_template = None
+            self.equipped_names = ()
             return None
 
         badge_top = round(height * 0.76)
         badge = image.crop((right_edge, badge_top, width, round(height * 0.96)))
         boxes = self._read_boxes("equipped", badge, height, top=badge_top, scale=1.5)
-        self.equipped_template = find_equipped_template(boxes)
-        return replace(echo, equipped_template=self.equipped_template)
+        self.equipped_names = find_equipped_names(boxes)
+        return replace(echo, equipped_names=self.equipped_names)
 
     def _read_panel(self, panel, width, height, *, origin_x, tuning):
         boxes = self._read_boxes(("panel", tuning), panel, height)

@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 import sys
 
-from wuwa_score.scoring import DEFAULT_TEMPLATE, calculate_echo_score, substat_tier_label, template_names
+from wuwa_score.scoring import calculate_echo_score, default_template, substat_tier_label, template_names
 
 
 def score_image(path, template):
@@ -16,7 +16,7 @@ def score_image(path, template):
     if echo is None:
         print("未识别到完整的单个声骸面板。", file=sys.stderr)
         return 1
-    template = template or echo.equipped_template or DEFAULT_TEMPLATE
+    template = template or echo.equipped_template or default_template()
     score = calculate_echo_score(template, echo.cost, echo.main_rows, echo.sub_rows)
     print(f"{template} · {echo.cost} COST")
     print(f"当前评分 {score.current_score:.2f} · 理论最高 {score.potential_score:.2f}")
@@ -42,7 +42,7 @@ def main():
         parser.error("实时评分需要 Windows")
     from wuwa_score.app import run
 
-    run(args.template or DEFAULT_TEMPLATE)
+    run(args.template or default_template())
     return 0
 
 

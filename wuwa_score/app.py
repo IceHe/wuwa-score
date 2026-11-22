@@ -2,15 +2,25 @@
 
 from dataclasses import dataclass
 import logging
+import os
+from pathlib import Path
 import queue
+import shutil
+import subprocess
+import sys
+import tempfile
 import threading
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
 from .capture import GameWindow, capture_game, enable_dpi_awareness, foreground_game
 from .overlay import ScoreOverlay
 from .recognition import Echo
-from .scoring import calculate_echo_score, substat_tier_label, template_names
+from .scoring import (
+    calculate_echo_score, reload_templates, resolve_template_name, substat_tier_label, template_names,
+)
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 @dataclass(frozen=True)
@@ -82,14 +92,15 @@ class ScoreWindow:
         self.template = template
         self.applied_template = template
         self.template_choices = template_names()
+        self.template_update = None
 
         root.title("wuwa-score · 声骸评分")
         root.configure(background=BG)
         # Start between the two game panels so the window does not cover
         # the stats it needs to capture on a typical single-display setup.
         offset = max(0, (root.winfo_screenwidth() - 390) // 2)
-        root.geometry(f"390x410+{offset}+48")
-        root.minsize(375, 410)
+        root.geometry(f"390x448+{offset}+48")
+        root.minsize(375, 448)
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
 
@@ -103,6 +114,10 @@ class ScoreWindow:
         style.configure("Score.TCheckbutton", background=BG, foreground=TEXT, font=(FONT, 9))
         style.map("Score.TCheckbutton", background=[("active", BG)],
                   foreground=[("active", TEXT)])
+        style.configure("Score.TButton", background=PANEL, foreground=TEXT,
+                        font=(FONT, 9), padding=(8, 4))
+        style.map("Score.TButton", background=[("active", "#273748")],
+                  foreground=[("disabled", MUTED)])
         root.option_add("*TCombobox*Listbox.font", (FONT, 9))
 
         content = tk.Frame(root, background=BG, padx=14, pady=12)
@@ -166,6 +181,16 @@ class ScoreWindow:
             footer, style="Score.TCheckbutton", text="画面内评分", variable=self.overlay_enabled,
             command=self.refresh_overlay,
         ).grid(row=0, column=1, padx=(8, 0))
+
+        actions = tk.Frame(content, background=BG)
+        actions.grid(row=5, column=0, sticky="ew", pady=(8, 0))
+        self.update_button = ttk.Button(actions, text="更新角色权重", style="Score.TButton",
+                                        command=self.start_template_update)
+        self.update_button.pack(side="left")
+        self.update_status = tk.StringVar()
+        tk.Label(actions, textvariable=self.update_status, bg=BG, fg=MUTED,
+                 font=(FONT, 9)).pack(side="left", padx=(8, 0))
+
         self.overlay = ScoreOverlay(root)
         root.after(100, self.poll)
 
@@ -200,6 +225,66 @@ class ScoreWindow:
         self.selector.set(self.template)
         self.selector.configure(values=self.template_choices)
 
+    def start_template_update(self):
+        if self.template_update is not None:
+            return
+        if shutil.which("git") is None:
+            self.update_status.set("请先安装 Git")
+            return
+
+        output = None
+        try:
+            output = tempfile.TemporaryFile()
+            script = ROOT / "scripts" / "update_xwuid_echo_templates.py"
+            process = subprocess.Popen(
+                [sys.executable, str(script)], cwd=ROOT,
+                stdout=output, stderr=subprocess.STDOUT,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "never"},
+            )
+        except OSError as error:
+            if output is not None:
+                output.close()
+            self.show_update_error(str(error))
+            return
+
+        self.template_update = process, output
+        self.update_button.state(["disabled"])
+        self.update_status.set("正在拉取和校验…")
+
+    def poll_template_update(self):
+        if self.template_update is None:
+            return
+        process, output = self.template_update
+        code = process.poll()
+        if code is None:
+            return
+
+        self.template_update = None
+        self.update_button.state(["!disabled"])
+        with output:
+            if code != 0:
+                output.seek(0)
+                details = output.read().decode("utf-8", errors="replace").strip()
+                self.show_update_error(details[-1000:] or f"更新脚本退出，错误码 {code}")
+                return
+        try:
+            changed = reload_templates()
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+            self.show_update_error(f"无法加载权重文件。当前评分继续使用已加载的权重。\n\n{error}")
+            return
+
+        self.template_choices = template_names()
+        self.template = resolve_template_name(self.template)
+        self.restore_template()
+        self.render()
+        count = len(self.template_choices)
+        self.update_status.set(f"已生效 · {count} 套" if changed else f"已是最新 · {count} 套")
+
+    def show_update_error(self, details):
+        self.update_status.set("更新失败")
+        messagebox.showerror("更新角色权重", details, parent=self.root)
+
     def poll(self):
         for _ in range(10):
             try:
@@ -211,6 +296,7 @@ class ScoreWindow:
             if update.echo is not None or update.clear:
                 self.echo = update.echo
                 self.render()
+        self.poll_template_update()
         self.refresh_overlay()
         self.root.after(100, self.poll)
 
@@ -251,7 +337,7 @@ def run(template):
     root = tk.Tk()
     updates = queue.SimpleQueue()
     stop = threading.Event()
-    ScoreWindow(root, template, updates)
+    window = ScoreWindow(root, template, updates)
     worker = threading.Thread(target=scan_live, args=(updates, stop), name="Echo OCR")
     worker.start()
     try:
@@ -259,3 +345,6 @@ def run(template):
     finally:
         stop.set()
         worker.join()
+        if window.template_update is not None:
+            _, output = window.template_update
+            output.close()

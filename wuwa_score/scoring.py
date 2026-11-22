@@ -12,8 +12,7 @@ import json
 import math
 from pathlib import Path
 
-with Path(__file__).with_name("templates.json").open(encoding="utf-8") as snapshot:
-    TEMPLATES = json.load(snapshot)["templates"]
+TEMPLATE_FILE = Path(__file__).with_name("templates.json")
 SCORE_PER_ECHO = 50.0
 ELEMENT_NAMES = {"冷凝", "热熔", "导电", "气动", "衍射", "湮灭"}
 SKILL_WEIGHT_INDEX = {
@@ -100,10 +99,10 @@ class EchoScoreResult:
     potential_score: float
 
 
-def _build_template_options():
+def _build_template_options(templates):
     rows = [
         (str(char_id), variant, template)
-        for char_id, variants in TEMPLATES.items()
+        for char_id, variants in templates.items()
         for variant, template in variants.items()
     ]
     duplicate_names = Counter(template["name"] for _, _, template in rows)
@@ -116,19 +115,58 @@ def _build_template_options():
     return options
 
 
-TEMPLATE_OPTIONS = _build_template_options()
-DEFAULT_TEMPLATE = TEMPLATES["default"]["default"]["name"]
-# Match the OKWW plugin's choice of the last variant for each character.
-EQUIPPED_TEMPLATES = {
-    label.partition("-")[0]: label
-    for label in TEMPLATE_OPTIONS
-    if label != DEFAULT_TEMPLATE and "-" in label
-}
+@dataclass(frozen=True)
+class TemplateCatalog:
+    options: dict[str, tuple[str, str, dict]]
+    equipped: dict[str, str]
+    default: str
+
+    def resolve(self, name):
+        if name in self.options:
+            return name
+        if name == "通用":
+            return self.default
+        return next((label for label in self.options if label.startswith(f"{name}-")), self.default)
+
+
+def _load_catalog(path):
+    with path.open(encoding="utf-8") as snapshot:
+        templates = json.load(snapshot)["templates"]
+    options = _build_template_options(templates)
+    default = templates["default"]["default"]["name"]
+    # Match the OKWW plugin's choice of the last variant for each character.
+    equipped = {
+        label.partition("-")[0]: label
+        for label in options
+        if label != default and "-" in label
+    }
+    return TemplateCatalog(options, equipped, default)
+
+
+_catalog = _load_catalog(TEMPLATE_FILE)
+
+
+def reload_templates(path=TEMPLATE_FILE):
+    """Load the whole replacement before making it visible to OCR and scoring."""
+    global _catalog
+    updated = _load_catalog(path)
+    changed = updated != _catalog
+    _catalog = updated
+    return changed
+
+
+def default_template():
+    return _catalog.default
+
+
+def template_for_equipped_names(names):
+    equipped = _catalog.equipped
+    return next((equipped[name] for name in names if name in equipped), None)
 
 
 def template_names():
     """Return character and variant templates as unique display labels."""
-    return list(TEMPLATE_OPTIONS)
+    return list(_catalog.options)
 
 
 def substat_tier(stat_name, value):
@@ -148,17 +186,12 @@ def substat_tier_label(stat_name, value):
 
 def resolve_template_name(template_name):
     """Resolve an exact option or migrate a legacy bare character name."""
-    if template_name in TEMPLATE_OPTIONS:
-        return template_name
-    if template_name == "通用":
-        return DEFAULT_TEMPLATE
-    prefix = f"{template_name}-"
-    matches = [name for name in template_names() if name.startswith(prefix)]
-    return matches[0] if matches else DEFAULT_TEMPLATE
+    return _catalog.resolve(template_name)
 
 
 def _selected_template(template_name):
-    return TEMPLATE_OPTIONS[resolve_template_name(template_name)][2]
+    catalog = _catalog
+    return catalog.options[catalog.resolve(template_name)][2]
 
 
 def _main_name(name):

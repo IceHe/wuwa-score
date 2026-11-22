@@ -7,6 +7,8 @@ import unittest
 from unittest.mock import patch
 
 from scripts import update_xwuid_echo_templates as updater
+from wuwa_score import scoring
+from wuwa_score.recognition import Echo, StatRow, TextBox, find_equipped_names
 
 
 def template(name):
@@ -74,3 +76,31 @@ class TestTemplateUpdate(unittest.TestCase):
     def test_rejects_zero_score_maximum(self):
         with self.assertRaisesRegex(ValueError, "score_max"):
             updater.read_template({**template("示例-通用"), "score_max": [50, 0, 52]}, "calc.json")
+
+    def test_reloads_weights_and_rematches_an_already_recognized_echo(self):
+        badge = TextBox("示例装配中", .4, .85, .6, .03)
+        row = StatRow("暴击", 10.5, "10.5%")
+        echo = Echo(1, (), (row,), equipped_names=find_equipped_names([badge]))
+        replacement = {"templates": {
+            "1001": {"default": template("示例-通用")},
+            "default": {"default": template("角色-通用")},
+        }}
+        with tempfile.TemporaryDirectory() as directory, patch.object(scoring, "_catalog", scoring._catalog):
+            snapshot = Path(directory) / "templates.json"
+            self.assertIsNone(echo.equipped_template)
+            updater.write_snapshot(snapshot, replacement)
+            self.assertTrue(scoring.reload_templates(snapshot))
+            self.assertEqual("示例-通用", echo.equipped_template)
+            before = scoring.calculate_echo_score(echo.equipped_template, echo.cost, (), echo.sub_rows)
+            self.assertFalse(scoring.reload_templates(snapshot))
+
+            replacement["templates"]["1001"]["default"]["sub_props"]["暴击"] = 3
+            updater.write_snapshot(snapshot, replacement)
+            self.assertTrue(scoring.reload_templates(snapshot))
+            after = scoring.calculate_echo_score(echo.equipped_template, echo.cost, (), echo.sub_rows)
+            self.assertGreater(after.current_score, before.current_score)
+
+            snapshot.write_text("{", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                scoring.reload_templates(snapshot)
+            self.assertEqual(after, scoring.calculate_echo_score(echo.equipped_template, echo.cost, (), echo.sub_rows))
