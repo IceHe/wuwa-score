@@ -20,6 +20,7 @@ def score_image(path, template):
     score = calculate_echo_score(template, echo.cost, echo.main_rows, echo.sub_rows)
     print(f"{template} · {echo.cost} COST")
     print(f"当前评分 {score.current_score:.2f} · 理论最高 {score.potential_score:.2f}")
+    print(f"双暴概率 {score.double_crit_probability:.2%}")
     for index, (row, points) in enumerate(zip(echo.main_rows + echo.sub_rows, score.row_scores)):
         tier = "主词条" if index < len(echo.main_rows) else substat_tier_label(row.stat_name, row.value)
         print(f"{row.stat_name}  {row.value_text}  {tier}  +{points:.2f}")

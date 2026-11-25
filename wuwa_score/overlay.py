@@ -118,14 +118,17 @@ class ScoreOverlay:
                 self.canvas.create_text(badge_right - badge_width + padding, y, text=f"{rank}档",
                                         anchor="w", fill=color, font=self.text_font)
 
-        summary = f"当前 {score.current_score:.2f}   理论最高 {score.potential_score:.2f}"
-        summary_width = max(self.text_font.measure(summary), self.text_font.measure(template)) + padding * 4
+        summary = (
+            (f"当前 {score.current_score:.2f}   理论最高 {score.potential_score:.2f}", MAIN_COLOR),
+            (f"双暴概率 {score.double_crit_probability:.2%}", HIGH_TIER_COLOR),
+            (template, WHITE),
+        )
+        summary_width = max(self.text_font.measure(text) for text, _ in summary) + padding * 4
         center = width // 2
         top = round(height * 0.095)
         self.canvas.create_rectangle(center - summary_width // 2, top,
-                                     center + summary_width // 2, top + line_height * 2 + padding * 2,
+                                     center + summary_width // 2, top + line_height * len(summary) + padding * 2,
                                      fill=BACKGROUND, width=0)
-        self.canvas.create_text(center, top + padding, text=summary, anchor="n",
-                                fill=MAIN_COLOR, font=self.text_font)
-        self.canvas.create_text(center, top + padding + line_height, text=template, anchor="n",
-                                fill=WHITE, font=self.text_font)
+        for index, (text, color) in enumerate(summary):
+            self.canvas.create_text(center, top + padding + line_height * index, text=text,
+                                    anchor="n", fill=color, font=self.text_font)

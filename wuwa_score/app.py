@@ -99,8 +99,8 @@ class ScoreWindow:
         # Start between the two game panels so the window does not cover
         # the stats it needs to capture on a typical single-display setup.
         offset = max(0, (root.winfo_screenwidth() - 390) // 2)
-        root.geometry(f"390x448+{offset}+48")
-        root.minsize(375, 448)
+        root.geometry(f"390x478+{offset}+48")
+        root.minsize(375, 478)
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
 
@@ -159,6 +159,12 @@ class ScoreWindow:
         scores.columnconfigure((0, 1), weight=1, uniform="scores")
         self.current = self.score_card(scores, 0, "当前评分", ACCENT)
         self.potential = self.score_card(scores, 1, "理论最高", TEXT)
+        probability = tk.Frame(scores, background=PANEL, padx=12, pady=3)
+        probability.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(4, 0))
+        tk.Label(probability, text="双暴概率", bg=PANEL, fg=MUTED, font=(FONT, 9)).pack(side="left")
+        self.double_crit = tk.StringVar(value="—")
+        tk.Label(probability, textvariable=self.double_crit, bg=PANEL, fg=TEXT,
+                 font=(FONT, 11, "bold")).pack(side="right")
 
         columns = ("stat", "value", "tier", "score")
         self.rows = ttk.Treeview(content, columns=columns, show="headings", height=7,
@@ -313,6 +319,7 @@ class ScoreWindow:
             self.score = None
             self.current.set("—")
             self.potential.set("—")
+            self.double_crit.set("—")
             self.cost.set("")
             return
 
@@ -323,6 +330,7 @@ class ScoreWindow:
         self.score = score
         self.current.set(f"{score.current_score:.2f}")
         self.potential.set(f"{score.potential_score:.2f}")
+        self.double_crit.set(f"{score.double_crit_probability:.2%}")
         detail = f"{matched}（自动匹配）" if matched else "主词条按 +25 计分"
         self.cost.set(f"{echo.cost} COST   ·   {detail}")
         for index, (row, points) in enumerate(zip(echo.main_rows + echo.sub_rows, score.row_scores)):

@@ -97,6 +97,7 @@ class EchoScoreResult:
     row_scores: tuple[float, ...]
     current_score: float
     potential_score: float
+    double_crit_probability: float
 
 
 def _build_template_options(templates):
@@ -225,6 +226,19 @@ def _max_main_value(cost, index, row):
     return slots[index].get(row.stat_name, row.value)
 
 
+def _double_crit_probability(existing_substats, remaining_slots):
+    missing = len({"暴击", "暴击伤害"} - existing_substats)
+    if missing == 0:
+        return 1.0
+    if missing > remaining_slots:
+        return 0.0
+
+    # All still-available types are equally likely and cannot repeat.
+    available = len(MAX_SUBSTAT_VALUES) - len(existing_substats)
+    qualifying = math.comb(available - missing, remaining_slots - missing)
+    return qualifying / math.comb(available, remaining_slots)
+
+
 def calculate_echo_score(template_name, cost, main_rows, sub_rows):
     """Score OCR rows using XW-UID's per-entry truncation and 50-point scale."""
     template = _selected_template(template_name)
@@ -270,4 +284,5 @@ def calculate_echo_score(template_name, cost, main_rows, sub_rows):
         row_scores=row_scores,
         current_score=round(sum(row_scores), 2),
         potential_score=potential_score,
+        double_crit_probability=_double_crit_probability(existing_substats, remaining_slots),
     )
