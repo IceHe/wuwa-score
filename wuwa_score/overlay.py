@@ -102,6 +102,18 @@ class ScoreOverlay:
         stat_left = round(min(anchor.left for anchor in echo.anchors) * width)
         badge_right = max(badge_width + 2, stat_left - padding)
 
+        current = f"当前分 {score.current_score:.2f}"
+        current_width = self.text_font.measure(current) + padding * 2
+        current_left = max(2, badge_right - current_width)
+        current_right = current_left + current_width
+        first_row_y = round(echo.anchors[0].center_y * height)
+        current_y = first_row_y - badge_half * 2 - padding
+        self.canvas.create_rectangle(current_left, current_y - badge_half,
+                                     current_right, current_y + badge_half,
+                                     fill=BACKGROUND, width=0)
+        self.canvas.create_text(current_right - padding, current_y, text=current,
+                                anchor="e", fill=MAIN_COLOR, font=self.text_font)
+
         rows = echo.main_rows + echo.sub_rows
         for index, (row, anchor, points) in enumerate(zip(rows, echo.anchors, score.row_scores)):
             y = round(anchor.center_y * height)
@@ -119,9 +131,9 @@ class ScoreOverlay:
                                         anchor="w", fill=color, font=self.text_font)
 
         summary = (
-            (f"当前 {score.current_score:.2f}   理论最高 {score.potential_score:.2f}", MAIN_COLOR),
+            (f"理论最高 {score.potential_score:.2f}", MAIN_COLOR),
             (f"双暴概率 {score.double_crit_probability:.2%}", HIGH_TIER_COLOR),
-            (f"最高分概率 {format_probability(score.potential_score_probability)}", HIGH_TIER_COLOR),
+            (f"理论最高分概率 {format_probability(score.potential_score_probability)}", HIGH_TIER_COLOR),
             (template, WHITE),
         )
         summary_width = max(self.text_font.measure(text) for text, _ in summary) + padding * 4

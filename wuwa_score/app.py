@@ -162,7 +162,7 @@ class ScoreWindow:
         self.potential_probability = tk.StringVar(value="—")
         for row, (label, value) in enumerate((
             ("双暴概率", self.double_crit),
-            ("最高分概率", self.potential_probability),
+            ("理论最高分概率", self.potential_probability),
         )):
             tk.Label(probability, text=label, bg=PANEL, fg=MUTED, font=(FONT, 9)).grid(
                 row=row, column=0, sticky="w"
