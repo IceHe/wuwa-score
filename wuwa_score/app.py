@@ -20,6 +20,7 @@ from .scoring import (
     calculate_echo_score, format_probability, reload_templates, resolve_template_name,
     substat_tier_label, template_names,
 )
+from .template_selector import TemplateSelector
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -92,7 +93,6 @@ class ScoreWindow:
         self.score = None
         self.template = template
         self.applied_template = template
-        self.template_choices = template_names()
         self.template_update = None
 
         root.title("wuwa-score · 声骸评分")
@@ -119,7 +119,6 @@ class ScoreWindow:
                         font=(FONT, 9), padding=(8, 4))
         style.map("Score.TButton", background=[("active", "#273748")],
                   foreground=[("disabled", MUTED)])
-        root.option_add("*TCombobox*Listbox.font", (FONT, 9))
 
         content = tk.Frame(root, background=BG, padx=14, pady=12)
         content.grid(sticky="nsew")
@@ -132,14 +131,10 @@ class ScoreWindow:
         tk.Label(controls, text="评分模板", bg=BG, fg=TEXT, font=(FONT, 9)).grid(
             row=0, column=0, padx=(0, 6)
         )
-        self.template_query = tk.StringVar(value=template)
-        self.selector = ttk.Combobox(controls, values=self.template_choices, font=(FONT, 9),
-                                     textvariable=self.template_query)
+        self.selector = TemplateSelector(
+            controls, template_names(), template, self.select_template, font=(FONT, 9)
+        )
         self.selector.grid(row=0, column=1, sticky="ew")
-        self.template_query.trace_add("write", self.filter_templates)
-        self.selector.bind("<<ComboboxSelected>>", self.select_template)
-        self.selector.bind("<Return>", self.select_template)
-        self.selector.bind("<Escape>", self.restore_template)
         self.auto_match = tk.BooleanVar(value=True)
         ttk.Checkbutton(
             controls, style="Score.TCheckbutton", text="自动", variable=self.auto_match,
@@ -221,25 +216,9 @@ class ScoreWindow:
         )
         return value
 
-    def filter_templates(self, *_):
-        query = self.template_query.get().strip().casefold()
-        self.selector.configure(values=[
-            name for name in self.template_choices if query in name.casefold()
-        ])
-
-    def select_template(self, _event):
-        entered = self.selector.get().strip()
-        matches = self.selector.cget("values")
-        if entered in self.template_choices:
-            self.template = entered
-        elif len(matches) == 1:
-            self.template = matches[0]
-        self.restore_template()
+    def select_template(self, name):
+        self.template = name
         self.render()
-
-    def restore_template(self, _event=None):
-        self.selector.set(self.template)
-        self.selector.configure(values=self.template_choices)
 
     def start_template_update(self):
         if self.template_update is not None:
@@ -290,11 +269,11 @@ class ScoreWindow:
             self.show_update_error(f"无法加载权重文件。当前评分继续使用已加载的权重。\n\n{error}")
             return
 
-        self.template_choices = template_names()
+        choices = template_names()
         self.template = resolve_template_name(self.template)
-        self.restore_template()
+        self.selector.replace_choices(choices, self.template)
         self.render()
-        count = len(self.template_choices)
+        count = len(choices)
         self.update_status.set(f"已生效 · {count} 套" if changed else f"已是最新 · {count} 套")
 
     def show_update_error(self, details):
