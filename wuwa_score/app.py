@@ -17,8 +17,8 @@ from .capture import GameWindow, capture_game, enable_dpi_awareness, foreground_
 from .overlay import ScoreOverlay
 from .recognition import Echo
 from .scoring import (
-    calculate_echo_score, format_probability, reload_templates, resolve_template_name,
-    substat_tier_label, template_names,
+    calculate_echo_score, default_template, format_probability, format_template_label,
+    reload_templates, resolve_template_name, substat_tier_label, template_names,
 )
 from .template_selector import TemplateSelector
 
@@ -91,8 +91,9 @@ class ScoreWindow:
         self.echo = None
         self.game = None
         self.score = None
-        self.template = template
-        self.applied_template = template
+        self.template = template or default_template()
+        self.template_specified = template is not None
+        self.applied_template_label = self.template
         self.template_update = None
 
         root.title("wuwa-score · 声骸评分")
@@ -132,7 +133,7 @@ class ScoreWindow:
             row=0, column=0, padx=(0, 6)
         )
         self.selector = TemplateSelector(
-            controls, template_names(), template, self.select_template, font=(FONT, 9)
+            controls, template_names(), self.template, self.select_template, font=(FONT, 9)
         )
         self.selector.grid(row=0, column=1, sticky="ew")
         self.auto_match = tk.BooleanVar(value=True)
@@ -218,6 +219,7 @@ class ScoreWindow:
 
     def select_template(self, name):
         self.template = name
+        self.template_specified = True
         self.render()
 
     def start_template_update(self):
@@ -270,7 +272,9 @@ class ScoreWindow:
             return
 
         choices = template_names()
-        self.template = resolve_template_name(self.template)
+        resolved = resolve_template_name(self.template)
+        self.template_specified = self.template_specified and resolved == self.template
+        self.template = resolved
         self.selector.replace_choices(choices, self.template)
         self.render()
         count = len(choices)
@@ -298,7 +302,7 @@ class ScoreWindow:
     def refresh_overlay(self):
         if (self.overlay_enabled.get() and self.game is not None and self.score is not None
                 and foreground_game() == self.game):
-            self.overlay.show(self.game, self.echo, self.score, self.applied_template)
+            self.overlay.show(self.game, self.echo, self.score, self.applied_template_label)
         else:
             self.overlay.hide()
 
@@ -314,16 +318,19 @@ class ScoreWindow:
             return
 
         echo = self.echo
-        matched = echo.equipped_template if self.auto_match.get() else None
-        self.applied_template = matched or self.template
-        score = calculate_echo_score(self.applied_template, echo.cost, echo.main_rows, echo.sub_rows)
+        automatic = self.auto_match.get()
+        matched = echo.equipped_template if automatic else None
+        template = matched or self.template
+        self.applied_template_label = format_template_label(
+            template, automatic=matched is not None, user_specified=self.template_specified or not automatic,
+        )
+        score = calculate_echo_score(template, echo.cost, echo.main_rows, echo.sub_rows)
         self.score = score
         self.current.set(f"{score.current_score:.2f}")
         self.potential.set(f"{score.potential_score:.2f}")
         self.double_crit.set(f"{score.double_crit_probability:.2%}")
         self.potential_probability.set(format_probability(score.potential_score_probability))
-        detail = f"{matched}（自动匹配）" if matched else "主词条按 +25 计分"
-        self.cost.set(f"{echo.cost} COST   ·   {detail}")
+        self.cost.set(f"{echo.cost} COST   ·   {self.applied_template_label}")
         for index, (row, points) in enumerate(zip(echo.main_rows + echo.sub_rows, score.row_scores)):
             main = index < len(echo.main_rows)
             tier = "主词条" if main else substat_tier_label(row.stat_name, row.value)

@@ -168,6 +168,14 @@ def default_template():
     return _catalog.default
 
 
+def format_template_label(name, *, automatic=False, user_specified=False):
+    if automatic:
+        return f"{name}（自动匹配）"
+    if user_specified:
+        return f"{name}（用户指定）"
+    return name
+
+
 def template_for_equipped_names(names):
     equipped = _catalog.equipped
     return next((equipped[name] for name in names if name in equipped), None)

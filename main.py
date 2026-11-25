@@ -5,7 +5,8 @@ from pathlib import Path
 import sys
 
 from wuwa_score.scoring import (
-    calculate_echo_score, default_template, format_probability, substat_tier_label, template_names,
+    calculate_echo_score, default_template, format_probability, format_template_label,
+    substat_tier_label, template_names,
 )
 
 
@@ -18,9 +19,11 @@ def score_image(path, template):
     if echo is None:
         print("未识别到完整的单个声骸面板。", file=sys.stderr)
         return 1
-    template = template or echo.equipped_template or default_template()
-    score = calculate_echo_score(template, echo.cost, echo.main_rows, echo.sub_rows)
-    print(f"{template} · {echo.cost} COST")
+    matched = echo.equipped_template if template is None else None
+    name = template or matched or default_template()
+    label = format_template_label(name, automatic=matched is not None, user_specified=template is not None)
+    score = calculate_echo_score(name, echo.cost, echo.main_rows, echo.sub_rows)
+    print(f"{label} · {echo.cost} COST")
     print(f"当前评分 {score.current_score:.2f} · 理论最高 {score.potential_score:.2f}")
     print(f"双暴概率 {score.double_crit_probability:.2%}")
     print(f"理论最高分概率 {format_probability(score.potential_score_probability)}")
@@ -46,7 +49,7 @@ def main():
         parser.error("实时评分需要 Windows")
     from wuwa_score.app import run
 
-    run(args.template or default_template())
+    run(args.template)
     return 0
 
 
