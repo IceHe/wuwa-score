@@ -24,6 +24,8 @@
 
 双暴概率表示保留已调谐副词条、填满五星声骸的五个副词条后，同时获得暴击和暴击伤害的概率。计算按剩余词条类型等概率、不重复抽取。评分窗口和画面内浮层会随识别结果更新。 [库洛调谐概率公示](https://sdk-prod-cdn-aws.kurogame-service.com/pro/agreement/common/language_ko/product_info.pdf#page=3)
 
+最高分概率表示保留已调谐副词条，开满其余位置后恰好达到当前模板所显示的理论最高分的概率。计算使用库洛公示的数值档位概率，计入所有同分的词条类型组合和数值档位。小于 0.01% 的非零概率以科学计数法显示。 [库洛词条档位概率表](https://sdk-prod-cdn-aws.kurogame-service.com/pro/agreement/common/language_ko/product_info.pdf#page=5)
+
 ## 截图验证
 
 可以使用游戏客户区的完整截图验证识别和评分。

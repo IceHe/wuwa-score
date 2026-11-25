@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+from itertools import combinations
 import json
 import math
 from pathlib import Path
@@ -27,21 +28,6 @@ _SHORT_SKILL_NAMES = {
     "共鸣技能": "共鸣技能伤害加成",
     "共鸣解放": "共鸣解放伤害加成",
 }
-MAX_SUBSTAT_VALUES = {
-    "暴击": 10.5,
-    "暴击伤害": 21.0,
-    "攻击%": 11.6,
-    "防御%": 14.7,
-    "生命%": 11.6,
-    "攻击": 60.0,
-    "防御": 70.0,
-    "生命": 580.0,
-    "共鸣效率": 12.4,
-    "普攻": 11.6,
-    "重击": 11.6,
-    "共鸣技能": 11.6,
-    "共鸣解放": 11.6,
-}
 SUBSTAT_TIERS = {
     "暴击": (6.3, 6.9, 7.5, 8.1, 8.7, 9.3, 9.9, 10.5),
     "暴击伤害": (12.6, 13.8, 15.0, 16.2, 17.4, 18.6, 19.8, 21.0),
@@ -56,6 +42,27 @@ SUBSTAT_TIERS = {
     "重击": (6.4, 7.1, 7.9, 8.6, 9.4, 10.1, 10.9, 11.6),
     "共鸣技能": (6.4, 7.1, 7.9, 8.6, 9.4, 10.1, 10.9, 11.6),
     "共鸣解放": (6.4, 7.1, 7.9, 8.6, 9.4, 10.1, 10.9, 11.6),
+}
+MAX_SUBSTAT_VALUES = {name: tiers[-1] for name, tiers in SUBSTAT_TIERS.items()}
+
+# Relative weights reproduce Kuro's published percentages rounded to four
+# decimal places. The weights follow SUBSTAT_TIERS from lowest to highest.
+_STANDARD_TIER_WEIGHTS = (7, 8, 21, 25, 18, 15, 6, 3)
+_CRIT_TIER_WEIGHTS = (70, 70, 70, 24, 24, 24, 9, 9)
+_SUBSTAT_TIER_WEIGHTS = {
+    "暴击": _CRIT_TIER_WEIGHTS,
+    "暴击伤害": _CRIT_TIER_WEIGHTS,
+    "攻击%": _STANDARD_TIER_WEIGHTS,
+    "防御%": _STANDARD_TIER_WEIGHTS,
+    "生命%": _STANDARD_TIER_WEIGHTS,
+    "攻击": (7, 54, 39, 3),
+    "防御": (15, 46, 33, 9),
+    "生命": _STANDARD_TIER_WEIGHTS,
+    "共鸣效率": _STANDARD_TIER_WEIGHTS,
+    "普攻": _STANDARD_TIER_WEIGHTS,
+    "重击": _STANDARD_TIER_WEIGHTS,
+    "共鸣技能": _STANDARD_TIER_WEIGHTS,
+    "共鸣解放": _STANDARD_TIER_WEIGHTS,
 }
 MAX_MAINSTAT_VALUES = {
     1: (
@@ -98,6 +105,7 @@ class EchoScoreResult:
     current_score: float
     potential_score: float
     double_crit_probability: float
+    potential_score_probability: float
 
 
 def _build_template_options(templates):
@@ -239,6 +247,37 @@ def _double_crit_probability(existing_substats, remaining_slots):
     return qualifying / math.comb(available, remaining_slots)
 
 
+def _potential_score_probability(candidates, remaining_slots, score_substat):
+    if remaining_slots == 0:
+        return 1.0
+
+    cutoff = candidates[remaining_slots - 1][0]
+    required, tied = [], []
+    for maximum, name in candidates:
+        if maximum < cutoff:
+            break
+        weights = _SUBSTAT_TIER_WEIGHTS[name]
+        qualifying = sum(
+            weight for tier, weight in zip(SUBSTAT_TIERS[name], weights, strict=True)
+            if score_substat(name, tier) == maximum
+        )
+        probabilities = required if maximum > cutoff else tied
+        probabilities.append(qualifying / sum(weights))
+
+    # Every type above the cutoff must appear. Types at the cutoff may
+    # substitute for one another, and each unordered set is equally likely.
+    tied_slots = remaining_slots - len(required)
+    tied_probability = math.fsum(math.prod(group) for group in combinations(tied, tied_slots))
+    return math.prod(required) * tied_probability / math.comb(len(candidates), remaining_slots)
+
+
+def format_probability(probability):
+    """Keep a nonzero chance visible even when it is far below 0.01%."""
+    if 0 < probability < 0.0001:
+        return f"{probability * 100:.2e}%"
+    return f"{probability:.2%}"
+
+
 def calculate_echo_score(template_name, cost, main_rows, sub_rows):
     """Score OCR rows using XW-UID's per-entry truncation and 50-point scale."""
     template = _selected_template(template_name)
@@ -249,34 +288,26 @@ def calculate_echo_score(template_name, cost, main_rows, sub_rows):
     if maximum <= 0:
         return None
 
+    def score_substat(name, value):
+        return _truncate_2(value * _entry_weight(2, name, cost, template) / maximum * SCORE_PER_ECHO)
+
     main_scores = tuple(
         _truncate_2(_max_main_value(cost, index, row)
                     * _entry_weight(index, row.stat_name, cost, template)
                     / maximum * SCORE_PER_ECHO)
         for index, row in enumerate(main_rows)
     )
-    sub_scores = tuple(
-        _truncate_2(row.value * _entry_weight(2, row.stat_name, cost, template)
-                    / maximum * SCORE_PER_ECHO)
-        for row in sub_rows
-    )
+    sub_scores = tuple(score_substat(row.stat_name, row.value) for row in sub_rows)
     row_scores = main_scores + sub_scores
     existing_substats = {row.stat_name for row in sub_rows}
     remaining_slots = max(0, 5 - len(sub_rows))
-    best_unrolled_scores = sorted(
-        (
-            _truncate_2(
-                max_value * _entry_weight(2, name, cost, template)
-                / maximum * SCORE_PER_ECHO
-            )
-            for name, max_value in MAX_SUBSTAT_VALUES.items()
-            if name not in existing_substats
-        ),
+    candidates = sorted(
+        ((score_substat(name, value), name) for name, value in MAX_SUBSTAT_VALUES.items()
+         if name not in existing_substats),
         reverse=True,
     )
     potential_score = round(
-        sum(row_scores)
-        + sum(best_unrolled_scores[:remaining_slots]),
+        sum(row_scores) + sum(points for points, _ in candidates[:remaining_slots]),
         2,
     )
     return EchoScoreResult(
@@ -285,4 +316,5 @@ def calculate_echo_score(template_name, cost, main_rows, sub_rows):
         current_score=round(sum(row_scores), 2),
         potential_score=potential_score,
         double_crit_probability=_double_crit_probability(existing_substats, remaining_slots),
+        potential_score_probability=_potential_score_probability(candidates, remaining_slots, score_substat),
     )

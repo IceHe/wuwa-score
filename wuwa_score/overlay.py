@@ -5,7 +5,7 @@ from ctypes import wintypes
 import tkinter as tk
 from tkinter import font
 
-from .scoring import substat_tier
+from .scoring import format_probability, substat_tier
 
 
 _user32 = ctypes.WinDLL("user32", use_last_error=True)
@@ -121,6 +121,7 @@ class ScoreOverlay:
         summary = (
             (f"当前 {score.current_score:.2f}   理论最高 {score.potential_score:.2f}", MAIN_COLOR),
             (f"双暴概率 {score.double_crit_probability:.2%}", HIGH_TIER_COLOR),
+            (f"最高分概率 {format_probability(score.potential_score_probability)}", HIGH_TIER_COLOR),
             (template, WHITE),
         )
         summary_width = max(self.text_font.measure(text) for text, _ in summary) + padding * 4

@@ -17,7 +17,8 @@ from .capture import GameWindow, capture_game, enable_dpi_awareness, foreground_
 from .overlay import ScoreOverlay
 from .recognition import Echo
 from .scoring import (
-    calculate_echo_score, reload_templates, resolve_template_name, substat_tier_label, template_names,
+    calculate_echo_score, format_probability, reload_templates, resolve_template_name,
+    substat_tier_label, template_names,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -99,8 +100,8 @@ class ScoreWindow:
         # Start between the two game panels so the window does not cover
         # the stats it needs to capture on a typical single-display setup.
         offset = max(0, (root.winfo_screenwidth() - 390) // 2)
-        root.geometry(f"390x478+{offset}+48")
-        root.minsize(375, 478)
+        root.geometry(f"390x502+{offset}+48")
+        root.minsize(375, 502)
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
 
@@ -161,10 +162,19 @@ class ScoreWindow:
         self.potential = self.score_card(scores, 1, "理论最高", TEXT)
         probability = tk.Frame(scores, background=PANEL, padx=12, pady=3)
         probability.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(4, 0))
-        tk.Label(probability, text="双暴概率", bg=PANEL, fg=MUTED, font=(FONT, 9)).pack(side="left")
+        probability.columnconfigure(0, weight=1)
         self.double_crit = tk.StringVar(value="—")
-        tk.Label(probability, textvariable=self.double_crit, bg=PANEL, fg=TEXT,
-                 font=(FONT, 11, "bold")).pack(side="right")
+        self.potential_probability = tk.StringVar(value="—")
+        for row, (label, value) in enumerate((
+            ("双暴概率", self.double_crit),
+            ("最高分概率", self.potential_probability),
+        )):
+            tk.Label(probability, text=label, bg=PANEL, fg=MUTED, font=(FONT, 9)).grid(
+                row=row, column=0, sticky="w"
+            )
+            tk.Label(probability, textvariable=value, bg=PANEL, fg=TEXT, font=(FONT, 11, "bold")).grid(
+                row=row, column=1, sticky="e"
+            )
 
         columns = ("stat", "value", "tier", "score")
         self.rows = ttk.Treeview(content, columns=columns, show="headings", height=7,
@@ -320,6 +330,7 @@ class ScoreWindow:
             self.current.set("—")
             self.potential.set("—")
             self.double_crit.set("—")
+            self.potential_probability.set("—")
             self.cost.set("")
             return
 
@@ -331,6 +342,7 @@ class ScoreWindow:
         self.current.set(f"{score.current_score:.2f}")
         self.potential.set(f"{score.potential_score:.2f}")
         self.double_crit.set(f"{score.double_crit_probability:.2%}")
+        self.potential_probability.set(format_probability(score.potential_score_probability))
         detail = f"{matched}（自动匹配）" if matched else "主词条按 +25 计分"
         self.cost.set(f"{echo.cost} COST   ·   {detail}")
         for index, (row, points) in enumerate(zip(echo.main_rows + echo.sub_rows, score.row_scores)):
