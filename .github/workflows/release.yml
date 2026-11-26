@@ -1,0 +1,39 @@
+name: Publish Windows ZIP
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+
+jobs:
+  release:
+    if: github.event.created
+    runs-on: ubuntu-latest
+    env:
+      PACKAGE_NAME: wuwa-score-${{ github.ref_name }}-windows-x64
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Package the Windows distribution
+        shell: bash
+        run: |
+          git archive --format=zip --prefix="${PACKAGE_NAME}/" \
+            --output="${PACKAGE_NAME}.zip" HEAD -- \
+            LICENSE.txt README.md docs install.cmd main.py requirements.txt scripts start.cmd wuwa_score
+
+      - name: Publish the release and attach the ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create "$GITHUB_REF_NAME" "${PACKAGE_NAME}.zip" \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --title "wuwa-score ${GITHUB_REF_NAME}" \
+            --generate-notes --notes "下载 Assets 下的 ${PACKAGE_NAME}.zip，解压后双击 install.cmd 安装，再双击 start.cmd 启动。"

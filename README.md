@@ -6,9 +6,10 @@
 
 需要 Windows 10 或 11（Intel / AMD 64 位）。安装时需要联网，脚本会准备 Python 和所需组件。
 
-1. 在 GitHub 仓库页面点击「Code」→「Download ZIP」，把整个项目解压到自己有写入权限的位置，例如 `D:\Tools\wuwa-score`。**包含 `install.cmd` 的文件夹就是安装目录**，Python 和所需组件也会放在里面。
-2. 打开该文件夹，双击 `install.cmd`，等到出现 `Installation complete`。
-3. 双击同一文件夹里的 `start.cmd`。以后直接双击 `start.cmd` 即可。
+1. 在 GitHub 的 Releases 页面打开最新版本，在「Assets」下下载 `wuwa-score-v版本号-windows-x64.zip`。还没有发布版本时，可在仓库首页点击「Code」→「Download ZIP」。 [打开 Releases](https://github.com/IceHe/wuwa-score/releases)
+2. 把 ZIP 解压到自己有写入权限的位置，例如 `D:\Tools\wuwa-score`。**包含 `install.cmd` 的文件夹就是安装目录**，Python 和所需组件也会放在里面。
+3. 打开该文件夹，双击 `install.cmd`，等到出现 `Installation complete`。
+4. 双击同一文件夹里的 `start.cmd`。以后直接双击 `start.cmd` 即可。
 
 **通常无需管理员权限。** 只有脚本尝试补装微软 Visual C++ 运行库时，Windows 才会提示管理员授权。没有管理员权限时，可以请电脑管理员协助补装，再运行 `install.cmd`。
 
