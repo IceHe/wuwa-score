@@ -1,25 +1,37 @@
 name: Publish Windows ZIP
 
 on:
-  push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, for example v1.0.0'
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.version }}
 
 jobs:
   release:
-    if: github.event.created
     runs-on: ubuntu-latest
     env:
-      PACKAGE_NAME: wuwa-score-${{ github.ref_name }}-windows-x64
+      RELEASE_VERSION: ${{ inputs.version }}
+      PACKAGE_NAME: wuwa-score-${{ inputs.version }}-windows-x64
     steps:
+      - name: Validate the release version
+        shell: bash
+        run: |
+          if [[ ! "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo 'Use v followed by three version numbers, for example v1.0.0.' >&2
+            exit 1
+          fi
+
       - uses: actions/checkout@v6
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Package the Windows distribution
@@ -34,6 +46,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release create "$GITHUB_REF_NAME" "${PACKAGE_NAME}.zip" \
-            --repo "$GITHUB_REPOSITORY" --verify-tag --title "wuwa-score ${GITHUB_REF_NAME}" \
+          tag_ref="refs/tags/${RELEASE_VERSION}"
+          if tagged_commit=$(git rev-parse --verify --quiet "${tag_ref}^{commit}"); then
+            if [[ "$tagged_commit" != "$GITHUB_SHA" ]]; then
+              echo "${RELEASE_VERSION} already points to a different commit." >&2
+              exit 1
+            fi
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              --raw-field "ref=${tag_ref}" --raw-field "sha=${GITHUB_SHA}" --silent
+          fi
+          gh release create "$RELEASE_VERSION" "${PACKAGE_NAME}.zip" \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --title "wuwa-score ${RELEASE_VERSION}" \
             --generate-notes --notes "下载 Assets 下的 ${PACKAGE_NAME}.zip，解压后双击 install.cmd 安装，再双击 start.cmd 启动。"

@@ -45,11 +45,10 @@
 
 ## 发布 Windows ZIP
 
-先将要发布的提交推送到 `main`，再为该提交创建并推送一个新版本标签。以下以 `v1.0.0` 为例。
+发布需要手动启动。先把要发布的提交推送到 `main`，再在 GitHub 的「Actions」中打开「Publish Windows ZIP」，点击「Run workflow」，选择 `main` 并填写版本号，例如 `v1.0.0`，最后点击「Run workflow」确认。
 
 ```powershell
-git tag -a v1.0.0 -m 'wuwa-score v1.0.0'
-git push origin v1.0.0
+gh workflow run release.yml --ref main -f version=v1.0.0
 ```
 
-GitHub Actions 在收到新建的 `v主版本.次版本.修订号` 标签时，从该提交打包程序、安装和启动脚本、模板及文档。工作流会创建 Release，并在「Assets」下附上 `wuwa-score-v1.0.0-windows-x64.zip`。目标电脑解压后仍需运行 `install.cmd` 联网安装依赖。
+这条命令与网页操作等效。工作流会从所选分支的提交打包，为该提交创建版本标签，然后发布 Release，并在「Assets」下附上 `wuwa-score-v1.0.0-windows-x64.zip`。推送代码或标签均不会触发发布。目标电脑解压后仍需运行 `install.cmd` 联网安装依赖。
