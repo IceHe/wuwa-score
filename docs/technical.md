@@ -45,10 +45,12 @@
 
 ## 发布 Windows ZIP
 
-发布需要手动启动。先把要发布的提交推送到 `main`，再在 GitHub 的「Actions」中打开「Publish Windows ZIP」，点击「Run workflow」，选择 `main` 并填写版本号，例如 `v1.0.0`，最后点击「Run workflow」确认。
+发布需要手动启动。先把要发布的提交推送到 `main`，再在 GitHub 的「Actions」中打开「Publish Windows ZIP」，点击「Run workflow」，选择 `main` 后确认运行。也可用 GitHub CLI 启动。
 
 ```powershell
-gh workflow run release.yml --ref main -f version=v1.0.0
+gh workflow run release.yml --ref main
 ```
 
-这条命令与网页操作等效。工作流会从所选分支的提交打包，为该提交创建版本标签，然后发布 Release，并在「Assets」下附上 `wuwa-score-v1.0.0-windows-x64.zip`。推送代码或标签均不会触发发布。目标电脑解压后仍需运行 `install.cmd` 联网安装依赖。
+工作流在开始时按北京时间生成日历版本号，月份和日期补零。以 2026 年 11 月 26 日为例，当天第一次发布是 `2026.11.26.0`，同一天后续版本在已有标签的最大序号上加一，次日重新从 `.0` 开始。每次只执行一个发布任务，避免取到相同的版本号。
+
+工作流为所选提交创建标签（如 `v2026.11.26.0`），并在 Release 的「Assets」下附上 `wuwa-score-v2026.11.26.0-windows-x64.zip`。推送代码或标签均不会触发发布。目标电脑解压后仍需运行 `install.cmd` 联网安装依赖。
