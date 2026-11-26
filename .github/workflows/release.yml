@@ -22,14 +22,18 @@ jobs:
         shell: bash
         run: |
           release_date=$(TZ=Asia/Shanghai date +%Y.%m.%d)
-          next_revision=$(git tag --list "v${release_date}.*" |
+          next_revision=$(git tag --list "v${release_date}" "v${release_date}.*" |
             awk -F. '
+              NF == 3 && next_revision < 1 { next_revision = 1 }
               NF == 4 && $4 ~ /^(0|[1-9][0-9]*)$/ && $4 >= next_revision {
                 next_revision = $4 + 1
               }
               END { print next_revision + 0 }
             ')
-          version="${release_date}.${next_revision}"
+          version="$release_date"
+          if (( next_revision > 0 )); then
+            version="${version}.${next_revision}"
+          fi
           printf 'RELEASE_VERSION=%s\nPACKAGE_NAME=wuwa-score-v%s-windows-x64\n' \
             "$version" "$version" >> "$GITHUB_ENV"
           echo "Release version: $version"
