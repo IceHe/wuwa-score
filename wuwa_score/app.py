@@ -25,6 +25,9 @@ from .template_selector import TemplateSelector
 
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT_URL = "https://github.com/IceHe/wuwa-score"
+ANALYZING_ECHO = "正在分析新声骸…"
+WATCH_INTERVAL = 0.15
+SEARCH_INTERVAL = 0.5
 
 
 @dataclass(frozen=True)
@@ -33,11 +36,16 @@ class Update:
     echo: Echo | None = None
     clear: bool = False
     game: GameWindow | None = None
+    analyzing: bool = False
 
 
 def scan_live(updates, stop, capture=capture_game):
     reader = None
     previous = None
+    scored = None
+    scored_signature = None
+    prefer_tuning = False
+    retry_transition = False
 
     def publish(update):
         nonlocal previous
@@ -45,37 +53,77 @@ def scan_live(updates, stop, capture=capture_game):
             updates.put(update)
             previous = update
 
-    while not stop.is_set():
+    def take_frame():
         try:
             frame = capture()
         except OSError:
             publish(Update("暂时无法截取画面，正在重试"))
-            stop.wait(0.5)
-            continue
-
+            return None
         if frame is None:
             publish(Update("等待鸣潮切到前台"))
-            stop.wait(0.5)
+        return frame
+
+    while not stop.is_set():
+        frame = take_frame()
+        if frame is None:
+            retry_transition = False
+            stop.wait(SEARCH_INTERVAL)
             continue
         image, game = frame
         try:
             if reader is None:
                 publish(Update("正在加载 OCR 模型…"))
-                from .ocr import EchoReader
+                from .ocr import EchoReader, echo_panel_changed, echo_panel_signature
                 reader = EchoReader()
                 # Load takes longer than one scan. Discard the pre-load frame.
                 continue
-            echo = reader.read(image)
+            if scored is not None:
+                if game == scored.game and not echo_panel_changed(
+                    scored_signature, echo_panel_signature(image, scored.echo),
+                ):
+                    publish(scored)
+                    stop.wait(WATCH_INTERVAL)
+                    continue
+                publish(Update(ANALYZING_ECHO, clear=True, game=game, analyzing=True))
+                scored = None
+                retry_transition = True
+            equipped_names = reader.equipped_names
+            echo = reader.read(image, prefer_tuning=prefer_tuning)
+            signature = echo_panel_signature(image, echo) if echo is not None else None
         except Exception:
             logging.exception("Echo OCR failed")
             publish(Update("OCR 运行失败，错误详情见终端", clear=True))
             return
 
         if echo is None:
+            if retry_transition:
+                # Keep the equipped character across a brief transition into tuning.
+                reader.equipped_names = equipped_names
+                retry_transition = False
+                stop.wait(WATCH_INTERVAL)
+                continue
             publish(Update("请打开单个声骸的详情或强化页面", clear=True))
-        else:
-            publish(Update("已识别当前声骸", echo, game=game))
-        stop.wait(0.5)
+            stop.wait(SEARCH_INTERVAL)
+            continue
+
+        # Check the newest pixels before publishing. OCR can finish after the
+        # user has already moved to another Echo or closed the game panel.
+        latest = take_frame()
+        if latest is None or latest[1] != game:
+            reader.equipped_names = equipped_names
+            continue
+        latest_signature = echo_panel_signature(latest[0], echo)
+        if echo_panel_changed(signature, latest_signature):
+            reader.equipped_names = equipped_names
+            publish(Update(ANALYZING_ECHO, clear=True, game=game, analyzing=True))
+            retry_transition = True
+            continue
+        scored = Update("已识别当前声骸", echo, game=game)
+        scored_signature = latest_signature
+        prefer_tuning = echo.anchors[0].left < 0.5
+        retry_transition = False
+        publish(scored)
+        stop.wait(WATCH_INTERVAL)
 
 
 BG = "#101721"
@@ -97,6 +145,7 @@ class ScoreWindow:
         self.template_specified = template is not None
         self.applied_template_label = self.template
         self.template_update = None
+        self.analyzing = False
 
         root.title("wuwa-score · 声骸评分")
         root.configure(background=BG)
@@ -218,7 +267,7 @@ class ScoreWindow:
         ).pack(side="right")
 
         self.overlay = ScoreOverlay(root)
-        root.after(100, self.poll)
+        root.after(60, self.poll)
 
     @staticmethod
     def score_card(parent, column, label, color):
@@ -306,16 +355,20 @@ class ScoreWindow:
                 break
             self.status.set(update.status)
             self.game = update.game
+            self.analyzing = update.analyzing
             if update.echo is not None or update.clear:
                 self.echo = update.echo
                 self.render()
         self.poll_template_update()
         self.refresh_overlay()
-        self.root.after(100, self.poll)
+        self.root.after(60, self.poll)
 
     def refresh_overlay(self):
-        if (self.overlay_enabled.get() and self.game is not None and self.score is not None
-                and foreground_game() == self.game):
+        if not self.overlay_enabled.get() or self.game is None or foreground_game() != self.game:
+            self.overlay.hide()
+        elif self.analyzing:
+            self.overlay.show(self.game, status=ANALYZING_ECHO)
+        elif self.score is not None:
             self.overlay.show(self.game, self.echo, self.score, self.applied_template_label)
         else:
             self.overlay.hide()

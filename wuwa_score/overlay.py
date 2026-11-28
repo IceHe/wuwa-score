@@ -62,17 +62,17 @@ class ScoreOverlay:
         self.drawn = None
         self.text_font = None
 
-    def show(self, game, echo, score, template):
-        state = (game, echo, score, template)
+    def show(self, game, echo=None, score=None, template=None, *, status=None):
+        state = (game, echo, score, template, status)
         if self.drawn == state:
             return
-        if not echo.anchors:
+        if status is None and not echo.anchors:
             self.hide()
             return
 
         left, top, right, bottom = game.bounds
         width, height = right - left, bottom - top
-        self._paint(width, height, echo, score, template)
+        self._paint(width, height, echo, score, template, status)
         if self.drawn is None:
             self.window.deiconify()
         # SetWindowPos accepts absolute positions on displays with negative
@@ -89,12 +89,15 @@ class ScoreOverlay:
             self.window.withdraw()
             self.drawn = None
 
-    def _paint(self, width, height, echo, score, template):
+    def _paint(self, width, height, echo, score, template, status=None):
         self.canvas.delete("all")
         size = max(12, min(24, round(height * 0.019)))
         self.text_font = font.Font(root=self.canvas, family=FONT, size=-size, weight="bold")
         padding = max(4, round(size * 0.33))
         line_height = self.text_font.metrics("linespace")
+        if status is not None:
+            self._paint_summary(width, height, ((status, MAIN_COLOR),), line_height, padding)
+            return
         badge_half = (line_height + 2) // 2
         score_width = self.text_font.measure("00.00")
         tier_width = self.text_font.measure("8档")
@@ -136,6 +139,9 @@ class ScoreOverlay:
             (f"理论最高分概率 {format_probability(score.potential_score_probability)}", HIGH_TIER_COLOR),
             (template, WHITE),
         )
+        self._paint_summary(width, height, summary, line_height, padding)
+
+    def _paint_summary(self, width, height, summary, line_height, padding):
         summary_width = max(self.text_font.measure(text) for text, _ in summary) + padding * 4
         center = width // 2
         top = round(height * 0.095)

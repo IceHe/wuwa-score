@@ -10,6 +10,48 @@ from onnxocr.onnx_paddleocr import ONNXPaddleOcr
 from .recognition import TextBox, clean, find_echo, find_equipped_names, stat_region
 
 
+def echo_panel_signature(image, echo):
+    """Sample high-contrast text near the recognized labels and values."""
+    width, height = image.size
+    layout_width = min(width, height * 16 / 9)
+    label_left = min(anchor.left for anchor in echo.anchors) * width
+    tuning = label_left < width / 2
+    value_right = layout_width * 0.37 if tuning else width - layout_width * 0.025
+    label_right = label_left + layout_width * 0.13
+    top = max(0.07, echo.anchors[0].center_y - 0.14) * height
+    bottom = min(0.83, echo.anchors[-1].center_y + 0.065) * height
+    regions = [
+        (label_left, top, label_right, bottom),
+        (value_right - layout_width * 0.11, (echo.anchors[0].center_y - 0.02) * height,
+         value_right, bottom),
+    ]
+    if not tuning:
+        regions.append((label_left, height * 0.85, label_right, height * 0.90))
+
+    signatures = []
+    scale = 900 / height
+    for left, top, right, bottom in regions:
+        crop = image.crop((round(left), round(top), min(width, round(right)), round(bottom)))
+        size = (max(1, round(crop.width * scale)), max(1, round(crop.height * scale)))
+        pixels = np.asarray(crop.convert("L").resize(size, Image.Resampling.BILINEAR))
+        # Use bright strokes with local contrast, so changes to the blurred
+        # background and dark score overlays to the left do not trigger OCR.
+        contrast = pixels - cv2.erode(pixels, None)
+        signatures.append((pixels, (pixels >= 155) & (contrast >= 30)))
+    return signatures
+
+
+def echo_panel_changed(before, after):
+    # Check bands separately so a changed digit can outweigh a still panel.
+    band = np.ones(10, dtype=np.int32)
+    for (old, old_text), (new, new_text) in zip(before, after):
+        changed = (old_text | new_text) & (cv2.absdiff(old, new) >= 35)
+        counts = np.count_nonzero(changed, axis=1)
+        if np.convolve(counts, band, mode="valid").max() >= 22:
+            return True
+    return False
+
+
 class EchoReader:
     def __init__(self):
         self.model = ONNXPaddleOcr(
@@ -18,7 +60,7 @@ class EchoReader:
         self.previous = {}
         self.equipped_names = ()
 
-    def read(self, image):
+    def read(self, image, *, prefer_tuning=True):
         image = image.convert("RGB")
         width, height = image.size
         if height > 1080:
@@ -28,23 +70,25 @@ class EchoReader:
         # The left and right panels anchor to their respective window edges
         # on wider displays. Size their search areas from the 16:9 layout.
         layout_width = min(width, height * 16 / 9)
-        left = image.crop((0, 0, round(layout_width * 0.41), round(height * 0.57)))
-        echo = self._read_panel(left, width, height, origin_x=0, tuning=True)
-        if echo is not None:
-            return replace(echo, equipped_names=self.equipped_names)
-
         right_edge = width - round(layout_width * 0.35)
-        right = image.crop((right_edge, 0, width, round(height * 0.83)))
-        echo = self._read_panel(right, width, height, origin_x=right_edge, tuning=False)
-        if echo is None:
-            self.equipped_names = ()
-            return None
-
-        badge_top = round(height * 0.76)
-        badge = image.crop((right_edge, badge_top, width, round(height * 0.96)))
-        boxes = self._read_boxes("equipped", badge, height, top=badge_top, scale=1.5)
-        self.equipped_names = find_equipped_names(boxes)
-        return replace(echo, equipped_names=self.equipped_names)
+        for tuning in (prefer_tuning, not prefer_tuning):
+            if tuning:
+                origin = 0
+                panel = image.crop((0, 0, round(layout_width * 0.41), round(height * 0.57)))
+            else:
+                origin = right_edge
+                panel = image.crop((right_edge, 0, width, round(height * 0.83)))
+            echo = self._read_panel(panel, width, height, origin_x=origin, tuning=tuning)
+            if echo is None:
+                continue
+            if not tuning:
+                badge_top = round(height * 0.76)
+                badge = image.crop((right_edge, badge_top, width, round(height * 0.96)))
+                boxes = self._read_boxes("equipped", badge, height, top=badge_top, scale=1.5)
+                self.equipped_names = find_equipped_names(boxes)
+            return replace(echo, equipped_names=self.equipped_names)
+        self.equipped_names = ()
+        return None
 
     def _read_panel(self, panel, width, height, *, origin_x, tuning):
         boxes = self._read_boxes(("panel", tuning), panel, height)
