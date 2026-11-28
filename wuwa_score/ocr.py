@@ -1,6 +1,7 @@
 """Standalone adapter for the PP-OCRv6 small models used by installed OKWW."""
 
 from dataclasses import replace
+import logging
 
 import cv2
 import numpy as np
@@ -8,6 +9,18 @@ from PIL import Image
 from onnxocr.onnx_paddleocr import ONNXPaddleOcr
 
 from .recognition import TextBox, clean, find_echo, find_equipped_names, stat_region
+
+
+OCR_OPTIONS = {"use_npu": False, "use_angle_cls": False, "det_limit_side_len": 1280}
+
+
+def load_gpu_model():
+    try:
+        from .directml import DirectMLOcr
+        return DirectMLOcr(use_openvino=False, **OCR_OPTIONS)
+    except Exception as error:
+        logging.getLogger(__name__).info("DirectML OCR unavailable: %s", error)
+        return None
 
 
 def echo_panel_signature(image, echo):
@@ -54,11 +67,13 @@ def echo_panel_changed(before, after):
 
 class EchoReader:
     def __init__(self):
-        self.model = ONNXPaddleOcr(
-            use_openvino=True, use_npu=False, use_angle_cls=False, det_limit_side_len=1280
-        )
+        self.model = ONNXPaddleOcr(use_openvino=True, **OCR_OPTIONS)
         self.previous = {}
         self.equipped_names = ()
+
+    def use_model(self, model):
+        self.model = model
+        self.previous.clear()
 
     def read(self, image, *, prefer_tuning=True):
         image = image.convert("RGB")

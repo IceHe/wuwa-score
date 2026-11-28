@@ -1,10 +1,11 @@
 import queue
+import threading
 import unittest
 from unittest.mock import Mock, patch
 
 from PIL import Image, ImageDraw, ImageEnhance
 
-from wuwa_score.app import ANALYZING_ECHO, scan_live
+from wuwa_score.app import ANALYZING_ECHO, GpuStatus, scan_live
 from wuwa_score.capture import GameWindow
 from wuwa_score.ocr import echo_panel_changed, echo_panel_signature
 from wuwa_score.recognition import Echo, StatAnchor, StatRow
@@ -91,4 +92,28 @@ class TestLiveEcho(unittest.TestCase):
         seen = [updates.get_nowait() for _ in range(4)]
         self.assertEqual(seen[2].status, ANALYZING_ECHO)
         self.assertEqual(seen[3].echo.equipped_names, names)
+        self.assertTrue(updates.empty())
+
+    def test_gpu_error_disables_gpu_and_retries_the_frame_on_cpu(self):
+        image, echo = sample(10)
+        frames = [image] * 4
+        stop = Mock(is_set=lambda: not frames)
+        gpu, cpu = object(), object()
+        reader = Mock(model=cpu, equipped_names=())
+        reader.read.side_effect = [RuntimeError("DirectML failed"), echo]
+        updates = queue.SimpleQueue()
+        preference = threading.Event()
+        preference.set()
+
+        with (patch("wuwa_score.ocr.EchoReader", return_value=reader),
+              patch("wuwa_score.ocr.load_gpu_model", return_value=gpu),
+              self.assertLogs(level="ERROR")):
+            scan_live(updates, stop, capture=lambda: (frames.pop(0), GAME), prefer_gpu=preference)
+
+        self.assertEqual([args[0] for args, _ in reader.use_model.call_args_list], [gpu, cpu])
+        self.assertEqual(updates.get_nowait(), GpuStatus(True))
+        self.assertEqual(updates.get_nowait(), GpuStatus(True, active=True))
+        self.assertIn("OCR", updates.get_nowait().status)
+        self.assertEqual(updates.get_nowait(), GpuStatus(False))
+        self.assertEqual(updates.get_nowait().echo, echo)
         self.assertTrue(updates.empty())

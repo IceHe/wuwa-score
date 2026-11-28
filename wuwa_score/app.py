@@ -39,8 +39,17 @@ class Update:
     analyzing: bool = False
 
 
-def scan_live(updates, stop, capture=capture_game):
+@dataclass(frozen=True)
+class GpuStatus:
+    available: bool
+    active: bool = False
+
+
+def scan_live(updates, stop, capture=capture_game, *, prefer_gpu=None):
     reader = None
+    cpu_model = None
+    gpu_model = None
+    gpu_active = False
     previous = None
     scored = None
     scored_signature = None
@@ -63,7 +72,21 @@ def scan_live(updates, stop, capture=capture_game):
             publish(Update("等待鸣潮切到前台"))
         return frame
 
+    if prefer_gpu is not None:
+        try:
+            from .ocr import load_gpu_model
+            gpu_model = load_gpu_model()
+        except (ImportError, OSError):
+            logging.exception("Could not probe DirectML OCR")
+        updates.put(GpuStatus(gpu_model is not None))
+
     while not stop.is_set():
+        requested = gpu_model is not None and prefer_gpu.is_set()
+        if requested != gpu_active:
+            gpu_active = requested
+            if reader is not None:
+                reader.use_model(gpu_model if gpu_active else cpu_model)
+            updates.put(GpuStatus(True, active=gpu_active))
         frame = take_frame()
         if frame is None:
             retry_transition = False
@@ -75,6 +98,9 @@ def scan_live(updates, stop, capture=capture_game):
                 publish(Update("正在加载 OCR 模型…"))
                 from .ocr import EchoReader, echo_panel_changed, echo_panel_signature
                 reader = EchoReader()
+                cpu_model = reader.model
+                if gpu_active:
+                    reader.use_model(gpu_model)
                 # Load takes longer than one scan. Discard the pre-load frame.
                 continue
             if scored is not None:
@@ -91,6 +117,13 @@ def scan_live(updates, stop, capture=capture_game):
             echo = reader.read(image, prefer_tuning=prefer_tuning)
             signature = echo_panel_signature(image, echo) if echo is not None else None
         except Exception:
+            if gpu_active and reader is not None:
+                logging.exception("DirectML OCR failed, switching to OpenVINO CPU")
+                gpu_active = False
+                gpu_model = None
+                reader.use_model(cpu_model)
+                updates.put(GpuStatus(False))
+                continue
             logging.exception("Echo OCR failed")
             publish(Update("OCR 运行失败，错误详情见终端", clear=True))
             return
@@ -146,14 +179,15 @@ class ScoreWindow:
         self.applied_template_label = self.template
         self.template_update = None
         self.analyzing = False
+        self.prefer_gpu = threading.Event()
 
         root.title("wuwa-score · 声骸评分")
         root.configure(background=BG)
         # Start between the two game panels so the window does not cover
         # the stats it needs to capture on a typical single-display setup.
         offset = max(0, (root.winfo_screenwidth() - 390) // 2)
-        root.geometry(f"390x530+{offset}+48")
-        root.minsize(375, 530)
+        root.geometry(f"390x554+{offset}+48")
+        root.minsize(375, 554)
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
 
@@ -166,7 +200,7 @@ class ScoreWindow:
         style.map("Treeview", background=[("selected", "#334B61")])
         style.configure("Score.TCheckbutton", background=BG, foreground=TEXT, font=(FONT, 9))
         style.map("Score.TCheckbutton", background=[("active", BG)],
-                  foreground=[("active", TEXT)])
+                  foreground=[("disabled", MUTED), ("active", TEXT)])
         style.configure("Score.TButton", background=PANEL, foreground=TEXT,
                         font=(FONT, 9), padding=(8, 4))
         style.map("Score.TButton", background=[("active", "#273748")],
@@ -258,8 +292,21 @@ class ScoreWindow:
         tk.Label(actions, textvariable=self.update_status, bg=BG, fg=MUTED,
                  font=(FONT, 9)).pack(side="left", padx=(8, 0))
 
+        gpu_controls = tk.Frame(content, background=BG)
+        gpu_controls.grid(row=6, column=0, sticky="ew", pady=(5, 0))
+        self.gpu_selected = tk.BooleanVar(value=False)
+        self.gpu_status = tk.StringVar(value="正在检测 GPU…")
+        self.gpu_button = ttk.Checkbutton(
+            gpu_controls, style="Score.TCheckbutton", text="优先使用 GPU",
+            variable=self.gpu_selected, command=self.select_gpu,
+        )
+        self.gpu_button.state(["disabled"])
+        self.gpu_button.pack(side="left")
+        tk.Label(gpu_controls, textvariable=self.gpu_status, bg=BG, fg=MUTED,
+                 font=(FONT, 9)).pack(side="right")
+
         credits = tk.Frame(content, background=BG)
-        credits.grid(row=6, column=0, sticky="ew", pady=(6, 0))
+        credits.grid(row=7, column=0, sticky="ew", pady=(6, 0))
         tk.Label(credits, text="作者 IceHe", bg=BG, fg=MUTED, font=(FONT, 9)).pack(side="left")
         ttk.Button(
             credits, text="GitHub ↗", style="Score.Link.TButton", cursor="hand2",
@@ -284,6 +331,22 @@ class ScoreWindow:
         self.template = name
         self.template_specified = True
         self.render()
+
+    def select_gpu(self):
+        if self.gpu_selected.get():
+            self.prefer_gpu.set()
+        else:
+            self.prefer_gpu.clear()
+
+    def update_gpu_status(self, status):
+        if status.available:
+            self.gpu_button.state(["!disabled"])
+            self.gpu_status.set("OCR · GPU" if status.active else "OCR · CPU")
+        else:
+            self.prefer_gpu.clear()
+            self.gpu_selected.set(False)
+            self.gpu_button.state(["disabled"])
+            self.gpu_status.set("GPU 不可用 · 使用 CPU")
 
     def start_template_update(self):
         if self.template_update is not None:
@@ -353,6 +416,9 @@ class ScoreWindow:
                 update = self.updates.get_nowait()
             except queue.Empty:
                 break
+            if isinstance(update, GpuStatus):
+                self.update_gpu_status(update)
+                continue
             self.status.set(update.status)
             self.game = update.game
             self.analyzing = update.analyzing
@@ -411,7 +477,8 @@ def run(template):
     updates = queue.SimpleQueue()
     stop = threading.Event()
     window = ScoreWindow(root, template, updates)
-    worker = threading.Thread(target=scan_live, args=(updates, stop), name="Echo OCR")
+    worker = threading.Thread(target=scan_live, args=(updates, stop),
+                              kwargs={"prefer_gpu": window.prefer_gpu}, name="Echo OCR")
     worker.start()
     try:
         root.mainloop()

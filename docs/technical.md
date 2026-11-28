@@ -14,6 +14,8 @@
 
 实时输入来自 Windows 可见桌面像素。OCR 使用依赖包自带的 PP-OCRv6 small 模型。切到其他应用时暂停取图，窗口保留最近的结果。回到鸣潮后恢复识别，离开声骸页面时清空分数。画面上的评分浮层支持鼠标点击穿透。
 
+CPU 识别使用 OpenVINO。GPU 识别使用 ONNX Runtime 的 DirectML 执行提供程序，要求显卡和驱动支持 DirectX 12。启动时会测试文字检测和识别两个模型能否在硬件 GPU 上推理。勾选后优先使用 DirectML，推理失败时会切回 CPU 并置灰选项。 [DirectML 硬件要求](https://onnxruntime.ai/docs/execution-providers/DirectML-ExecutionProvider.html#requirements)
+
 可以在项目目录使用游戏客户区的完整截图验证识别和评分。
 
 ```powershell
