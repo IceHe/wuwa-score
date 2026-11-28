@@ -43,7 +43,7 @@ jobs:
         run: |
           git archive --format=zip --prefix="${PACKAGE_NAME}/" \
             --output="${PACKAGE_NAME}.zip" HEAD -- \
-            LICENSE.txt README.md docs install.cmd main.py requirements.txt scripts start.cmd wuwa_score
+            LICENSE.txt NOTICE.md README.md docs install.cmd main.py requirements.txt scripts start.cmd wuwa_score
 
       - name: Publish the release and attach the ZIP
         env:

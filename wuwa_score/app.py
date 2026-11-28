@@ -12,6 +12,7 @@ import tempfile
 import threading
 import tkinter as tk
 from tkinter import messagebox, ttk
+import webbrowser
 
 from .capture import GameWindow, capture_game, enable_dpi_awareness, foreground_game
 from .overlay import ScoreOverlay
@@ -23,6 +24,7 @@ from .scoring import (
 from .template_selector import TemplateSelector
 
 ROOT = Path(__file__).resolve().parents[1]
+PROJECT_URL = "https://github.com/IceHe/wuwa-score"
 
 
 @dataclass(frozen=True)
@@ -101,8 +103,8 @@ class ScoreWindow:
         # Start between the two game panels so the window does not cover
         # the stats it needs to capture on a typical single-display setup.
         offset = max(0, (root.winfo_screenwidth() - 390) // 2)
-        root.geometry(f"390x502+{offset}+48")
-        root.minsize(375, 502)
+        root.geometry(f"390x530+{offset}+48")
+        root.minsize(375, 530)
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
 
@@ -120,6 +122,10 @@ class ScoreWindow:
                         font=(FONT, 9), padding=(8, 4))
         style.map("Score.TButton", background=[("active", "#273748")],
                   foreground=[("disabled", MUTED)])
+        style.configure("Score.Link.TButton", background=BG, foreground=ACCENT,
+                        font=(FONT, 9, "underline"), borderwidth=0, padding=(3, 1))
+        style.map("Score.Link.TButton", background=[("active", BG)],
+                  foreground=[("active", TEXT)])
 
         content = tk.Frame(root, background=BG, padx=14, pady=12)
         content.grid(sticky="nsew")
@@ -202,6 +208,14 @@ class ScoreWindow:
         self.update_status = tk.StringVar()
         tk.Label(actions, textvariable=self.update_status, bg=BG, fg=MUTED,
                  font=(FONT, 9)).pack(side="left", padx=(8, 0))
+
+        credits = tk.Frame(content, background=BG)
+        credits.grid(row=6, column=0, sticky="ew", pady=(6, 0))
+        tk.Label(credits, text="作者 IceHe", bg=BG, fg=MUTED, font=(FONT, 9)).pack(side="left")
+        ttk.Button(
+            credits, text="GitHub ↗", style="Score.Link.TButton", cursor="hand2",
+            command=lambda: webbrowser.open_new_tab(PROJECT_URL),
+        ).pack(side="right")
 
         self.overlay = ScoreOverlay(root)
         root.after(100, self.poll)

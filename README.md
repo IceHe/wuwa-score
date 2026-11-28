@@ -25,4 +25,11 @@
 
 已安装 Git 时，点击「更新角色权重」可联网更新评分模板，更新后立即生效。
 
-[技术说明](docs/technical.md) · [许可证](LICENSE.txt)
+## 作者与致谢
+
+`wuwa-score` 由 IceHe 开发和维护。 [GitHub 项目主页](https://github.com/IceHe/wuwa-score)
+
+- 感谢 ok-oldking 和 OKWW 的贡献者。实时识别和声骸评分参考了 OKWW 的实现。 [OKWW](https://github.com/ok-oldking/ok-wuthering-waves)
+- 感谢 Loping151、tyql688 和 XW-UID 的贡献者。角色评分模板来自 XW-UID 的资源仓库。 [XutheringWavesUID](https://github.com/Loping151/XutheringWavesUID) · [评分资源](https://cnb.cool/loping151/XutheringWavesUID-Resources)
+
+本项目程序代码采用 AGPL-3.0。各上游项目的许可及角色权重来源见第三方许可说明。 [许可证](LICENSE.txt) · [第三方许可](NOTICE.md) · [技术说明](docs/technical.md)
